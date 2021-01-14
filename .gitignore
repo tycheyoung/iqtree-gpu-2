@@ -23,3 +23,4 @@ build/
 /.dir-locals.el
 /iqtree_config.h
 .DS_Store
+dataset/
