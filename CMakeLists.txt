@@ -59,6 +59,7 @@ set(CMAKE_LEGACY_CYGWIN_WIN32 0)
 set(GCC_MIN_VERSION "4.8")
 
 project(iqtree)
+enable_language(CUDA)
 add_definitions(-DIQ_TREE)
 
 # Find Eigen3 library
@@ -816,3 +817,11 @@ endif()
 include (CPack)
 
 #add_custom_target(dist COMMAND ${CMAKE_MAKE_PROGRAM} package_source)
+add_subdirectory(kernels)
+# set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_30 --cudart shared")
+# set_property(TARGET iqtree 
+#              PROPERTY CUDA_SEPARABLE_COMPILATION ON)
+
+target_link_libraries(iqtree2 kernels)
+# set(CMAKE_CXX_FLAGS	"${CMAKE_CXX_FLAGS}	-Wall")	
+# set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_35 -Xcompiler=-Wall -dlink")
