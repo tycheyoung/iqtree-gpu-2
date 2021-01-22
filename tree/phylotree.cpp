@@ -34,6 +34,7 @@
 #include "model/modelmixture.h"
 #include "phylonodemixlen.h"
 #include "phylotreemixlen.h"
+#include "kernels/kernels.cuh"
 
 const int LH_MIN_CONST = 1;
 
@@ -1219,7 +1220,7 @@ Node *findFirstFarLeaf(Node *node, Node *dad = NULL) {
     
 }
 
-void preprocess(int nodeLevel[], int treeArray[], double treeLengthArray[], double MLMinBranchLength, int depth, Node* curr) {
+void preprocess(int nodeLevel[], int treeArray[], elem_t treeLengthArray[], double MLMinBranchLength, int depth, Node* curr) {
     nodeLevel[curr->id] = depth;
 
     NeighborVec neivec = curr->neighbors;
@@ -1227,95 +1228,113 @@ void preprocess(int nodeLevel[], int treeArray[], double treeLengthArray[], doub
     for (itr = neivec.begin(); itr != neivec.end(); itr++){
         if (nodeLevel[(*itr)->node->id] == -1) {
             treeArray[(*itr)->node->id] = curr->id;
-            treeLengthArray[(*itr)->node->id] = (*itr)->length > MLMinBranchLength ? (*itr)->length: MLMinBranchLength;
+            treeLengthArray[(*itr)->node->id] = (elem_t) ((*itr)->length > MLMinBranchLength ? (*itr)->length: MLMinBranchLength);
             preprocess(nodeLevel, treeArray, treeLengthArray, MLMinBranchLength, depth + 1, (*itr)->node);
         }
     }
 }
 
+
 double PhyloTree::computeLikelihoodGPU() {
     double MLMinBranchLength = 5.0e-9;
     int treeArray[nodeNum] = { 0 };
-    double treeLengthArray[nodeNum] = { 0 };
+    elem_t treeLengthArray[nodeNum] = { 0 };
     int nodeLevel[nodeNum];
     for (int i = 0; i < nodeNum; i++) nodeLevel[i] = -1;
     Node *start = root;
     //may have to check for case in which there is only one node
     if (start->isLeaf()) start = start->neighbors[0]->node;
-
-    cout << aln->char_partition << endl;
+    // cout << aln->char_partition << endl;
 
     treeArray[start->id] = -1;
     preprocess(nodeLevel, treeArray, treeLengthArray, MLMinBranchLength, 0, start);
 
-    cout << "gpu sequence array" << endl;
-    cout << aln->GPUseqs << endl;
-    cout << "number of sequences" << endl;
-    cout << aln->getNSeq() << endl;
-    cout << "number of aligned columns" << endl;
-    cout << aln->getNSite() << endl;
+    // cout << "gpu sequence array" << endl;
+    // cout << aln->GPUseqs << endl;
+    // cout << "number of sequences" << endl;
+    // cout << aln->getNSeq() << endl;
+    // cout << "number of aligned columns" << endl;
+    // cout << aln->getNSite() << endl;
+    
 
-    cout << "tree array" << endl;
-    for (int i = 0; i < nodeNum; i++) {
-        cout << treeArray[i] << ", ";
+    // cout << "tree array" << endl;
+    // for (int i = 0; i < nodeNum; i++) {
+    //     cout << treeArray[i] << ", ";
+    // }
+    // cout << endl << "length array" << endl;
+    // for (int i = 0; i < nodeNum; i++) {
+    //     cout << treeLengthArray[i] << ", ";
+    // }
+    // cout << endl <<"depth array" << endl;
+    // for (int i = 0; i < nodeNum; i++) {
+    //     cout << nodeLevel[i] << ", ";
+    // }
+    // cout << endl;
+
+    elem_t rate_mat[16];
+    for (int i = 0 ; i < 16; ++i) {
+        rate_mat[i] = 0.25;
     }
-    cout << endl << "length array" << endl;
-    for (int i = 0; i < nodeNum; i++) {
-        cout << treeLengthArray[i] << ", ";
+    elem_t pi[4] = {0.25, 0.25, 0.25, 0.25};
+
+    int seq_num = aln->getNSeq();
+    int seq_length = aln->getNSite();   
+    char seq_transpose_concat[seq_num * seq_length];
+    for (int i = 0; i < seq_num; i++) {
+        for (int j = 0 ; j < seq_length ; j++) {
+            seq_transpose_concat[j * seq_num + i] = aln->GPUseqs[i * seq_length + j];
+        }
     }
 
-    cout << endl <<"depth array" << endl;
-    for (int i = 0; i < nodeNum; i++) {
-        cout << nodeLevel[i] << ", ";
-    }
-    cout << endl;
-
+    return cuda_maxll_score(seq_transpose_concat, treeArray, treeLengthArray, nodeLevel, rate_mat, 
+                            pi, nodeNum, seq_length, seq_num);
 }
 
 
 
 double PhyloTree::computeLikelihood(double *pattern_lh) {
-    computeLikelihoodGPU();
-    ASSERT(model);
-    ASSERT(site_rate);
-    ASSERT(root->isLeaf());
-    if (!current_it) {
-        Node *leaf = findFarthestLeaf();
-        current_it = (PhyloNeighbor*)leaf->neighbors[0];
-        current_it_back = (PhyloNeighbor*)current_it->node->findNeighbor(leaf);
-//        PhyloNeighbor *nei = ((PhyloNeighbor*) root->neighbors[0]);
-//        current_it = nei;
-//        assert(current_it);
-//        current_it_back = (PhyloNeighbor*) nei->node->findNeighbor(root);
-//        assert(current_it_back);
-    }
-    double score;
-//    string root_name = ROOT_NAME;
-//    Node *vroot = findLeafName(root_name);
-//    if (root_state != aln->STATE_UNKNOWN && vroot) {
-//        if (verbose_mode >= VB_DEBUG)
-//            cout << __func__ << " HIT ROOT STATE " << endl;
-//        score = computeLikelihoodRooted((PhyloNeighbor*) vroot->neighbors[0], (PhyloNode*) vroot);
-//    } else {
-        score = computeLikelihoodBranch(current_it, (PhyloNode*) current_it_back->node);
-//    }
-    if (pattern_lh)
-        memmove(pattern_lh, _pattern_lh, aln->size() * sizeof(double));
+    
+//     ASSERT(model);
+//     ASSERT(site_rate);
+//     ASSERT(root->isLeaf());
+//     if (!current_it) {
+//         Node *leaf = findFarthestLeaf();
+//         current_it = (PhyloNeighbor*)leaf->neighbors[0];
+//         current_it_back = (PhyloNeighbor*)current_it->node->findNeighbor(leaf);
+// //        PhyloNeighbor *nei = ((PhyloNeighbor*) root->neighbors[0]);
+// //        current_it = nei;
+// //        assert(current_it);
+// //        current_it_back = (PhyloNeighbor*) nei->node->findNeighbor(root);
+// //        assert(current_it_back);
+//     }
+//     double score;
+// //    string root_name = ROOT_NAME;
+// //    Node *vroot = findLeafName(root_name);
+// //    if (root_state != aln->STATE_UNKNOWN && vroot) {
+// //        if (verbose_mode >= VB_DEBUG)
+// //            cout << __func__ << " HIT ROOT STATE " << endl;
+// //        score = computeLikelihoodRooted((PhyloNeighbor*) vroot->neighbors[0], (PhyloNode*) vroot);
+// //    } else {
+//         score = computeLikelihoodBranch(current_it, (PhyloNode*) current_it_back->node);
+// //    }
+//     if (pattern_lh)
+//         memmove(pattern_lh, _pattern_lh, aln->size() * sizeof(double));
 
-    if (pattern_lh && current_it->lh_scale_factor < 0.0) {
-        int nptn = aln->getNPattern();
-        //double check_score = 0.0;
-        for (int i = 0; i < nptn; i++) {
-            pattern_lh[i] += max(current_it->scale_num[i], UBYTE(0)) * LOG_SCALING_THRESHOLD;
-            //check_score += (pattern_lh[i] * (aln->at(i).frequency));
-        }
-        /*       if (fabs(score - check_score) > 1e-6) {
-         cout << "score = " << score << " check_score = " << check_score << endl;
-         outError("Scaling error ", __func__);
-         }*/
-    }
-    curScore = score;
-    return score;
+//     if (pattern_lh && current_it->lh_scale_factor < 0.0) {
+//         int nptn = aln->getNPattern();
+//         //double check_score = 0.0;
+//         for (int i = 0; i < nptn; i++) {
+//             pattern_lh[i] += max(current_it->scale_num[i], UBYTE(0)) * LOG_SCALING_THRESHOLD;
+//             //check_score += (pattern_lh[i] * (aln->at(i).frequency));
+//         }
+//         /*       if (fabs(score - check_score) > 1e-6) {
+//          cout << "score = " << score << " check_score = " << check_score << endl;
+//          outError("Scaling error ", __func__);
+//          }*/
+//     }
+//     curScore = score;
+    // return score;
+    return computeLikelihoodGPU();
 }
 
 //double PhyloTree::computeLikelihoodRooted(PhyloNeighbor *dad_branch, PhyloNode *dad) {

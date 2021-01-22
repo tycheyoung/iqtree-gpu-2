@@ -46,4 +46,4 @@ parstree.h
 discordance.cpp
 )
 
-target_link_libraries(tree pll model alignment)
+target_link_libraries(tree pll model alignment kernels)
