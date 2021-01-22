@@ -1,8 +1,9 @@
 #include "kernels.cuh"
+#include "cub/cub.cuh"
 
 __device__ __forceinline__ elem_t siteLogLikelihood(nodeLikelihood root, elem_t* pi) {
     nodeLikelihood pi_root_sh;  //shift by exp(500)
-    elem_t shift_max = -max(max(root.A, root.C), max(root.G, root.T));
+    elem_t shift_max = -_MAX(_MAX(root.A, root.C), _MAX(root.G, root.T));
 
     pi_root_sh.A = pi[0] * __expf(root.A + shift_max);
     pi_root_sh.C = pi[1] * __expf(root.C + shift_max);
@@ -84,7 +85,7 @@ __global__ void computePerSiteScore(nodeLikelihood* nodeVal, elem_t* __restrict_
         nodeLikelihood child = nodeVal[seqcolIdx * totalNodeNum + idx];
         nodeLikelihood shft_child;
 
-        elem_t shift_max = -max(max(child.A, child.C), max(child.G, child.T));
+        elem_t shift_max = -_MAX(_MAX(child.A, child.C), _MAX(child.G, child.T));
         elem_t* expm_p = expm_branch + idx * 16;
 
         shft_child.A = __expf(child.A + shift_max);

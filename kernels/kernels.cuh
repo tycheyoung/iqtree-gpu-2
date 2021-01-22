@@ -11,12 +11,9 @@
 #include "/usr/local/cuda/include/cuda.h"
 #include "/usr/local/cuda/include/cuda_runtime.h"
 #include "cuda_runtime_api.h"
-#include "cub/cub.cuh"
-
-
 
 #define USE_FLOAT
-#define max(a,b)  fmaxf(a,b)
+#define _MAX(a,b)  fmaxf(a,b)
 
 #define N_THREADS 1024
 
