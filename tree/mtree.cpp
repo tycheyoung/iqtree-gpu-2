@@ -27,6 +27,145 @@
 #include "mtreeset.h"
 using namespace std;
 
+
+/*********************************************
+    preOrderIterator 
+*********************************************/
+MTree::preOrderIterator::preOrderIterator() {}
+
+//constructor
+MTree::preOrderIterator::preOrderIterator(Node* start) {
+    nodeStack.push(start);
+}
+
+//postfix increment
+MTree::preOrderIterator MTree::preOrderIterator::operator++(int) {
+    MTree:preOrderIterator curr = *this;
+    ++(*this);
+    return curr;
+}
+
+//prefix increment
+MTree::preOrderIterator MTree::preOrderIterator::operator++() {
+    Node* curr = nodeStack.top();
+    nodeStack.pop();
+    NeighborVec neivec = curr->neighbors;
+    visited.insert(curr);
+
+    NeighborVec::iterator itr = neivec.begin();
+    NeighborVec::iterator end = neivec.end();
+    while (itr != end) {
+        if (visited.find((*itr)->node)==visited.end()) {
+            nodeStack.push((*itr)->node);
+        }
+        itr++;
+    }
+    return *this;
+}
+
+//equality
+bool MTree::preOrderIterator::operator==(const preOrderIterator& other) {
+    if (!nodeStack.empty() && !other.nodeStack.empty()){
+        return (other.nodeStack.top() == nodeStack.top());
+    }
+    return (nodeStack.empty() && other.nodeStack.empty());
+}
+
+//inequality
+bool MTree::preOrderIterator::operator!=(const preOrderIterator& other) {
+    if (!nodeStack.empty() && !other.nodeStack.empty()){
+        return (other.nodeStack.top() != nodeStack.top());
+    }
+    return !(nodeStack.empty() && other.nodeStack.empty());
+}
+
+//dereference
+Node& MTree::preOrderIterator::operator*() {
+    return *(nodeStack.top());
+}
+
+/*********************************************
+    postOrderIterator
+*********************************************/
+MTree::postOrderIterator::postOrderIterator() {}
+
+//constructor
+MTree::postOrderIterator::postOrderIterator(Node* start) {
+    nodeStack.push(start);
+    while (!nodeStack.empty()) {
+        Node *curr = nodeStack.top();
+        nodeStack.pop();
+        out.push(curr);
+
+        NeighborVec neivec = curr->neighbors;
+        visited.insert(curr);
+
+        NeighborVec::iterator itr = neivec.begin();
+        NeighborVec::iterator end = neivec.end();
+        while (itr != end) {
+            if (visited.find((*itr)->node)==visited.end()) {
+                nodeStack.push((*itr)->node);
+            }
+            itr++;
+        }
+    }
+}
+
+//postfix increment
+MTree::postOrderIterator MTree::postOrderIterator::operator++(int) {
+    MTree:postOrderIterator curr = *this;
+    ++(*this);
+    return curr;
+}
+
+//prefix increment
+MTree::postOrderIterator MTree::postOrderIterator::operator++() {
+    out.pop();
+    return *this;
+}
+
+//equality
+bool MTree::postOrderIterator::operator==(const postOrderIterator& other) {
+    if (!out.empty() && !other.out.empty()){
+        return (other.out.top() == out.top());
+    }
+    return (out.empty() && other.out.empty());
+}
+
+//inequality
+bool MTree::postOrderIterator::operator!=(const postOrderIterator& other) {
+    if (!out.empty() && !other.out.empty()){
+        return (other.out.top() != out.top());
+    }
+    return !(out.empty() && other.out.empty());
+}
+
+//dereference
+Node& MTree::postOrderIterator::operator*() {
+    return *(out.top());
+}
+
+/*********************************************
+    iterator methods
+*********************************************/
+
+MTree::preOrderIterator MTree::beginPreOrder() {
+    return MTree::preOrderIterator(this->root);
+}
+
+MTree::preOrderIterator MTree::endPreOrder() {
+    return MTree::preOrderIterator();
+}
+
+MTree::postOrderIterator MTree::beginPostOrder() {
+    return MTree::postOrderIterator(this->root);
+}
+
+MTree::postOrderIterator MTree::endPostOrder() {
+    return MTree::postOrderIterator();
+}
+
+
 /*********************************************
 	class MTree
 *********************************************/

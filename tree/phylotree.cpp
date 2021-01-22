@@ -980,7 +980,7 @@ uint64_t PhyloTree::getMemoryRequired(size_t ncategory, bool full_mem) {
         mem_size += model->getMemoryRequired();
 
     int64_t lh_scale_size = block_size * sizeof(double) + scale_block_size * sizeof(UBYTE);
-
+    
     max_lh_slots = leafNum-2;
 
     if (!full_mem && params->lh_mem_save == LM_MEM_SAVE) {
@@ -1219,7 +1219,63 @@ Node *findFirstFarLeaf(Node *node, Node *dad = NULL) {
     
 }
 
+void preprocess(int nodeLevel[], int treeArray[], double treeLengthArray[], double MLMinBranchLength, int depth, Node* curr) {
+    nodeLevel[curr->id] = depth;
+
+    NeighborVec neivec = curr->neighbors;
+    NeighborVec::iterator itr;
+    for (itr = neivec.begin(); itr != neivec.end(); itr++){
+        if (nodeLevel[(*itr)->node->id] == -1) {
+            treeArray[(*itr)->node->id] = curr->id;
+            treeLengthArray[(*itr)->node->id] = (*itr)->length > MLMinBranchLength ? (*itr)->length: MLMinBranchLength;
+            preprocess(nodeLevel, treeArray, treeLengthArray, MLMinBranchLength, depth + 1, (*itr)->node);
+        }
+    }
+}
+
+double PhyloTree::computeLikelihoodGPU() {
+    double MLMinBranchLength = 5.0e-9;
+    int treeArray[nodeNum] = { 0 };
+    double treeLengthArray[nodeNum] = { 0 };
+    int nodeLevel[nodeNum];
+    for (int i = 0; i < nodeNum; i++) nodeLevel[i] = -1;
+    Node *start = root;
+    //may have to check for case in which there is only one node
+    if (start->isLeaf()) start = start->neighbors[0]->node;
+
+    cout << aln->char_partition << endl;
+
+    treeArray[start->id] = -1;
+    preprocess(nodeLevel, treeArray, treeLengthArray, MLMinBranchLength, 0, start);
+
+    cout << "gpu sequence array" << endl;
+    cout << aln->GPUseqs << endl;
+    cout << "number of sequences" << endl;
+    cout << aln->getNSeq() << endl;
+    cout << "number of aligned columns" << endl;
+    cout << aln->getNSite() << endl;
+
+    cout << "tree array" << endl;
+    for (int i = 0; i < nodeNum; i++) {
+        cout << treeArray[i] << ", ";
+    }
+    cout << endl << "length array" << endl;
+    for (int i = 0; i < nodeNum; i++) {
+        cout << treeLengthArray[i] << ", ";
+    }
+
+    cout << endl <<"depth array" << endl;
+    for (int i = 0; i < nodeNum; i++) {
+        cout << nodeLevel[i] << ", ";
+    }
+    cout << endl;
+
+}
+
+
+
 double PhyloTree::computeLikelihood(double *pattern_lh) {
+    computeLikelihoodGPU();
     ASSERT(model);
     ASSERT(site_rate);
     ASSERT(root->isLeaf());

@@ -981,6 +981,8 @@ public:
      */
     virtual double computeLikelihood(double *pattern_lh = NULL);
 
+    virtual double computeLikelihoodGPU();
+        
     /**
      * @return number of elements per site lhl entry, used in conjunction with computePatternLhCat
      */

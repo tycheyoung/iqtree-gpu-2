@@ -20,6 +20,7 @@
 #ifndef MTREE_H
 #define MTREE_H
 
+#include <stack>
 #include "node.h"
 //#include "splitgraph.h"
 #include "pda/split.h"
@@ -42,7 +43,68 @@ General-purposed tree
  */
 class MTree {
 public:
+    class preOrderIterator{
+        public:
 
+            //constructor
+            preOrderIterator();
+
+            //constructor
+            preOrderIterator(Node* start);
+
+            //postfix increment (dummy int for disambiguation)
+            preOrderIterator operator++(int);
+
+            //prefix increment
+            preOrderIterator operator++();
+
+            //equality
+            bool operator==(const preOrderIterator& other);
+            bool operator!=(const preOrderIterator& other);
+
+            //dereference
+            Node& operator*();
+
+        private:
+            stack<Node*> nodeStack;
+            unordered_set<Node*> visited;
+    };
+
+    class postOrderIterator{
+        public:
+
+            //constructor
+            postOrderIterator();
+
+            //constructor
+            postOrderIterator(Node* start);
+
+            //postfix increment (dummy int for disambiguation)
+            postOrderIterator operator++(int);
+
+            //prefix increment
+            postOrderIterator operator++();
+
+            //equality
+            bool operator==(const postOrderIterator& other);
+            bool operator!=(const postOrderIterator& other);
+
+            //dereference
+            Node& operator*();
+
+        private:
+            stack<Node*> nodeStack;
+            stack<Node*> out;
+            unordered_set<Node*> visited;
+    };
+
+    postOrderIterator beginPostOrder();
+
+    postOrderIterator endPostOrder();
+
+    preOrderIterator beginPreOrder();
+
+    preOrderIterator endPreOrder();
     /********************************************************
             CONSTRUCTORs, INITIALIZATION AND DESTRUCTORs
      ********************************************************/
