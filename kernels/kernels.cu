@@ -51,21 +51,36 @@ __global__ void build_expm(elem_t* expm_branch, elem_t* treeLengthArray, elem_t*
 }
 
 
-__global__ void nodeValInit(nodeLikelihood* nodeVal, char* seq, int* node_level, int totalNodeNum, 
+__global__ void nodeValInit(nodeLikelihood* nodeVal, char* seq, int* __restrict__ node_level, int totalNodeNum, 
                             int seqLength, int seqNum, int max_node_level) {
-    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= totalNodeNum)
-        return;
-    const int seqcolIdx = blockIdx.y;
+    // const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    // if (idx >= totalNodeNum)
+    //     return;
+    // const int seqcolIdx = blockIdx.y;
+    // if (seqcolIdx >= seqLength)
+    //     return;
+
+    // // cooperative_groups::grid_group g = cooperative_groups::this_grid();
+    // int curr_node_level = node_level[idx];
+    // if(curr_node_level == max_node_level) {  // initialize childs
+    //     nodeVal[seqcolIdx * totalNodeNum + idx] = constructBaseLeaf(encodeBase(seq[seqcolIdx * seqNum + ]));
+    // }
+    // else {
+    //     nodeVal[seqcolIdx * totalNodeNum + idx] = {.A = 0, .C = 0, .G = 0, .T = 0};  // multiply-cumulated
+    // }
+    const int seqcolIdx = blockIdx.x * blockDim.x + threadIdx.x;
     if (seqcolIdx >= seqLength)
         return;
-    // cooperative_groups::grid_group g = cooperative_groups::this_grid();
-    int curr_node_level = node_level[idx];
-    if(curr_node_level == max_node_level) {  // initialize childs
-        nodeVal[seqcolIdx * totalNodeNum + idx] = constructBaseLeaf(encodeBase(seq[seqcolIdx * seqNum - idx + totalNodeNum - 1]));
-    }
-    else {
-        nodeVal[seqcolIdx * totalNodeNum + idx] = {.A = 0, .C = 0, .G = 0, .T = 0};  // multiply-cumulated
+    
+    int j = 0;
+    for (int idx = 0 ; idx < totalNodeNum; idx++) {
+        if(node_level[idx] == max_node_level) {  // initialize childs
+            nodeVal[seqcolIdx * totalNodeNum + idx] = constructBaseLeaf(encodeBase(seq[seqcolIdx * seqNum + j]));
+            j++;
+        }
+        else {
+            nodeVal[seqcolIdx * totalNodeNum + idx] = {.A = 0, .C = 0, .G = 0, .T = 0};  // multiply-cumulated
+        }
     }
 }
 
@@ -140,13 +155,13 @@ elem_t cuda_maxll_score(char* seqs, int* treeArray, elem_t* treeLengthArray, int
     HANDLE_ERROR(cudaMemcpy(d_node_level, node_level, tree_total_node_num * sizeof(int), cudaMemcpyHostToDevice));
     HANDLE_ERROR(cudaMemcpy(d_seqs, seqs, seq_length * seq_num * sizeof(char), cudaMemcpyHostToDevice));
     HANDLE_ERROR(cudaMemcpy(d_treeLengthArray, treeLengthArray, tree_total_node_num * sizeof(elem_t), cudaMemcpyHostToDevice));
-
+    
     /// Kernel Launch ///
     dim3 computeMLSiteBlocks((tree_total_node_num + N_THREADS - 1) / N_THREADS, seq_length);
     dim3 computeMLSiteTPB(N_THREADS, 1, 1);
 
     build_expm<<<(tree_total_node_num+N_THREADS-1)/N_THREADS , N_THREADS>>>(d_expm_branch, d_treeLengthArray, d_rate_mat, tree_total_node_num);
-    nodeValInit<<<computeMLSiteBlocks, computeMLSiteTPB>>>(d_nodeVal, d_seqs, d_node_level, tree_total_node_num, seq_length, seq_num, h_max_depth);
+    nodeValInit<<<(seq_length + N_THREADS - 1) / N_THREADS, N_THREADS>>>(d_nodeVal, d_seqs, d_node_level, tree_total_node_num, seq_length, seq_num, h_max_depth);
     for (int curr_depth = h_max_depth; curr_depth > 0; curr_depth--) {
         computePerSiteScore<<<computeMLSiteBlocks, computeMLSiteTPB>>>(d_nodeVal, d_expm_branch, d_treeArray, d_node_level,
                                                                     tree_total_node_num, seq_length, seq_num, curr_depth);
