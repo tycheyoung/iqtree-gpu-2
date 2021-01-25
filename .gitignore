@@ -24,3 +24,4 @@ build/
 /iqtree_config.h
 .DS_Store
 dataset/
+.vscode/
