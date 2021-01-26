@@ -549,6 +549,7 @@ private:
 public:
 
     string GPUseqs;
+    string GPUtranspose;
 
     /**
     *  Fast and accurate optimiation for alpha and p_invar

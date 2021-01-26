@@ -397,6 +397,18 @@ void Alignment::checkGappySeq(bool force_error) {
     }
 }
 
+void computeTranspose(Alignment *aln) {
+    int seq_num = aln->getNSeq();
+    int seq_length = aln->getNSite();   
+    char seq_transpose_concat[seq_num * seq_length];
+    for (int i = 0; i < seq_num; i++) {
+        for (int j = 0 ; j < seq_length ; j++) {
+            seq_transpose_concat[j * seq_num + i] = Params::getInstance().GPUseqs[i * seq_length + j];
+        }
+    }
+    Params::getInstance().GPUtranspose = seq_transpose_concat;
+}
+
 Alignment::Alignment(char *filename, char *sequence_type, InputType &intype, string model) : vector<Pattern>() {
     name = "Noname";
     this->model_name = model;
@@ -420,24 +432,32 @@ Alignment::Alignment(char *filename, char *sequence_type, InputType &intype, str
         if (intype == IN_NEXUS) {
             cout << "Nexus format detected" << endl;
             readNexus(filename);
+            computeTranspose(this);
         } else if (intype == IN_FASTA) {
             cout << "Fasta format detected" << endl;
             readFasta(filename, sequence_type);
+            computeTranspose(this);
         } else if (intype == IN_PHYLIP) {
             cout << "Phylip format detected" << endl;
-            if (Params::getInstance().phylip_sequential_format)
+            if (Params::getInstance().phylip_sequential_format) {
                 readPhylipSequential(filename, sequence_type);
-            else
+                computeTranspose(this);
+            } else {
                 readPhylip(filename, sequence_type);
+                computeTranspose(this);
+            }
         } else if (intype == IN_COUNTS) {
             cout << "Counts format (PoMo) detected" << endl;
             readCountsFormat(filename, sequence_type);
+            computeTranspose(this);
         } else if (intype == IN_CLUSTAL) {
             cout << "Clustal format detected" << endl;
             readClustal(filename, sequence_type);
+            computeTranspose(this);
         } else if (intype == IN_MSF) {
             cout << "MSF format detected" << endl;
             readMSF(filename, sequence_type);
+            computeTranspose(this);
         } else {
             outError("Unknown sequence format, please use PHYLIP, FASTA, CLUSTAL, MSF, or NEXUS format");
         }
