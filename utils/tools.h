@@ -548,6 +548,8 @@ private:
     //void operator=(Params const&) {}; // Disable assignment
 public:
 
+    string GPUseqs;
+
     /**
     *  Fast and accurate optimiation for alpha and p_invar
     */

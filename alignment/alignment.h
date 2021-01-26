@@ -749,8 +749,6 @@ public:
     /** either SEQ_BINARY, SEQ_DNA, SEQ_PROTEIN, SEQ_MORPH, or SEQ_CODON */
     SeqType seq_type;
 
-    string GPUseqs;
-
     StateType STATE_UNKNOWN;
 
     /**

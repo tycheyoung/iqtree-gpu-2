@@ -60,7 +60,6 @@ char genetic_code25[] = "KNKNTTTTRSRSIIMIQHQHPPPPRRRRLLLLEDEDAAAAGGGGVVVV*Y*YSSS
 Alignment::Alignment()
         : vector<Pattern>()
 {
-    GPUseqs = "";
     num_states = 0;
     frac_const_sites = 0.0;
     frac_invariant_sites = 0.0;
@@ -399,7 +398,6 @@ void Alignment::checkGappySeq(bool force_error) {
 }
 
 Alignment::Alignment(char *filename, char *sequence_type, InputType &intype, string model) : vector<Pattern>() {
-    GPUseqs = "";
     name = "Noname";
     this->model_name = model;
     if (sequence_type)
@@ -1673,12 +1671,12 @@ int Alignment::buildPattern(StrVector &sequences, char *sequence_type, int nseq,
     return 1;
 }
 
-void processSeq(string &sequence, string &line, int line_num, string &GPUseqs) {
+void processSeq(string &sequence, string &line, int line_num, Params &params) {
     for (string::iterator it = line.begin(); it != line.end(); it++) {
         if ((*it) <= ' ') continue;
         if (isalnum(*it) || (*it) == '-' || (*it) == '?'|| (*it) == '.' || (*it) == '*' || (*it) == '~') {
             sequence.append(1, toupper(*it));
-            GPUseqs.append(1, toupper(*it)); 
+            params.GPUseqs.append(1, toupper(*it)); 
         }
         else if (*it == '(' || *it == '{') {
             auto start_it = it;
@@ -1748,7 +1746,10 @@ int Alignment::readPhylip(char *filename, char *sequence_type) {
                     sequences[seq_id].append(1, state);
                     if (num_states < state+1) num_states = state+1;
                 }
-            } else processSeq(sequences[seq_id], line, line_num, GPUseqs);
+            } else {
+                
+                processSeq(sequences[seq_id], line, line_num, Params::getInstance());
+            }
             if (sequences[seq_id].length() != sequences[0].length()) {
                 err_str << "Line " << line_num << ": Sequence " << seq_names[seq_id] << " has wrong sequence length " << sequences[seq_id].length() << endl;
                 throw err_str.str();
@@ -1815,7 +1816,7 @@ int Alignment::readPhylipSequential(char *filename, char *sequence_type) {
                 seq_names[seq_id] = line.substr(0, pos);
                 line.erase(0, pos);
             }
-            processSeq(sequences[seq_id], line, line_num, GPUseqs);
+            processSeq(sequences[seq_id], line, line_num, Params::getInstance());
             if (sequences[seq_id].length() > nsite)
                 throw ("Line " + convertIntToString(line_num) + ": Sequence " + seq_names[seq_id] + " is too long (" + convertIntToString(sequences[seq_id].length()) + ")");
             if (sequences[seq_id].length() == nsite) {
@@ -1868,7 +1869,7 @@ int Alignment::readFasta(char *filename, char *sequence_type) {
         }
         // read sequence contents
         if (sequences.empty()) throw "First line must begin with '>' to define sequence name";
-        processSeq(sequences.back(), line, line_num, GPUseqs);
+        processSeq(sequences.back(), line, line_num, Params::getInstance());
     }
     in.clear();
     // set the failbit again
@@ -1965,7 +1966,7 @@ int Alignment::readClustal(char *filename, char *sequence_type) {
         pos = line.find_first_of(" \t");
         line = line.substr(0, pos);
         // read sequence contents
-        processSeq(sequences[seq_count], line, line_num, GPUseqs);
+        processSeq(sequences[seq_count], line, line_num, Params::getInstance());
         seq_count++;
     }
     in.clear();
@@ -2070,7 +2071,7 @@ int Alignment::readMSF(char *filename, char *sequence_type) {
 
         line = line.substr(pos+1);
         // read sequence contents
-        processSeq(sequences[seq_count], line, line_num, GPUseqs);
+        processSeq(sequences[seq_count], line, line_num, Params::getInstance());
         seq_count++;
         if (seq_count == seq_names.size())
             seq_count = 0;

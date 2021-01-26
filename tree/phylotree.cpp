@@ -1249,8 +1249,8 @@ double PhyloTree::computeLikelihoodGPU() {
     treeArray[start->id] = -1;
     preprocess(nodeLevel, treeArray, treeLengthArray, MLMinBranchLength, 0, start);
 
-    // cout << "gpu sequence array" << endl;
-    // cout << aln->GPUseqs << endl;
+    //cout << "gpu sequence array" << endl;
+    //cout << params->GPUseqs << endl;
     // cout << "number of sequences" << endl;
     // cout << aln->getNSeq() << endl;
     // cout << "number of aligned columns" << endl;
@@ -1282,7 +1282,7 @@ double PhyloTree::computeLikelihoodGPU() {
     char seq_transpose_concat[seq_num * seq_length];
     for (int i = 0; i < seq_num; i++) {
         for (int j = 0 ; j < seq_length ; j++) {
-            seq_transpose_concat[j * seq_num + i] = aln->GPUseqs[i * seq_length + j];
+            seq_transpose_concat[j * seq_num + i] = params->GPUseqs[i * seq_length + j];
         }
     }
 
