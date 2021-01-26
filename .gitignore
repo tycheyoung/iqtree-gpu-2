@@ -25,3 +25,5 @@ build/
 .DS_Store
 dataset/
 .vscode/
+kernels/cub/
+kernels/cub_new/
