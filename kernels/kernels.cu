@@ -137,7 +137,7 @@ __global__ void rootScoreCalc(float* treeSiteScore, int* node_level, elem_t* pi,
 }
 
 
-void cuda_maxll_score(elem_t output_score, char* seqs, int* treeArray, elem_t* treeLengthArray, int* node_level, elem_t* rate_mat, 
+void cuda_maxll_score(elem_t& output_score, char* seqs, int* treeArray, elem_t* treeLengthArray, int* node_level, elem_t* rate_mat, 
                         elem_t* pi, int tree_total_node_num, int seq_length, int seq_num) {
 
     int h_max_depth = *std::max_element(node_level, node_level + tree_total_node_num);

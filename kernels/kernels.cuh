@@ -49,7 +49,7 @@ static void HandleError( cudaError_t err,
                                     __FILE__, __LINE__ ); \
                             exit( EXIT_FAILURE );}}
 
-void cuda_maxll_score(elem_t output_score, char* seqs, int* treeArray, elem_t* treeLengthArray, int* node_level, elem_t* rate_mat, 
+void cuda_maxll_score(elem_t& output_score, char* seqs, int* treeArray, elem_t* treeLengthArray, int* node_level, elem_t* rate_mat, 
                     elem_t* pi, int tree_total_node_num, int seq_length, int seq_num);
 
 #endif
