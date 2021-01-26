@@ -1285,9 +1285,10 @@ double PhyloTree::computeLikelihoodGPU() {
             seq_transpose_concat[j * seq_num + i] = params->GPUseqs[i * seq_length + j];
         }
     }
-
-    return cuda_maxll_score(seq_transpose_concat, treeArray, treeLengthArray, nodeLevel, rate_mat, 
-                            pi, nodeNum, seq_length, seq_num);
+    elem_t score = 0.0;
+    cuda_maxll_score(score, seq_transpose_concat, treeArray, treeLengthArray, nodeLevel, rate_mat, 
+                     pi, nodeNum, seq_length, seq_num);
+    return -score;
 }
 
 

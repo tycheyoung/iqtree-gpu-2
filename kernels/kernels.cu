@@ -51,7 +51,7 @@ __global__ void build_expm(elem_t* expm_branch, elem_t* treeLengthArray, elem_t*
 }
 
 
-__global__ void nodeValInit(nodeLikelihood* nodeVal, char* seq, int* __restrict__ node_level, int totalNodeNum, 
+__global__ void nodeValInit(nodeLikelihood* nodeVal, char* seq, int* node_level, int totalNodeNum, 
                             int seqLength, int seqNum, int max_node_level) {
     // const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     // if (idx >= totalNodeNum)
@@ -112,18 +112,32 @@ __global__ void computePerSiteScore(nodeLikelihood* nodeVal, elem_t* __restrict_
         atomicAdd(&(nodeVal[seqcolIdx * totalNodeNum + parent_].C), __logf(expm_p[1] * shft_child.A + expm_p[5] * shft_child.C + expm_p[9]  * shft_child.G + expm_p[13] * shft_child.T)-shift_max);
         atomicAdd(&(nodeVal[seqcolIdx * totalNodeNum + parent_].G), __logf(expm_p[2] * shft_child.A + expm_p[6] * shft_child.C + expm_p[10] * shft_child.G + expm_p[14] * shft_child.T)-shift_max);
         atomicAdd(&(nodeVal[seqcolIdx * totalNodeNum + parent_].T), __logf(expm_p[3] * shft_child.A + expm_p[7] * shft_child.C + expm_p[11] * shft_child.G + expm_p[15] * shft_child.T)-shift_max);
+        // if (seqcolIdx == 0) {
+        //     for (int i = 0 ; i < 50; ++i) {
+        //         printf("%f %f %f %f \n", nodeVal[seqcolIdx * totalNodeNum + parent_].A, nodeVal[seqcolIdx * totalNodeNum + parent_].C, nodeVal[seqcolIdx * totalNodeNum + parent_].G, nodeVal[seqcolIdx * totalNodeNum + parent_].T);
+        //     } printf("\n");
+        // }
     }
 }
 
-__global__ void rootScoreCalc(float* treeSiteScore, elem_t* pi, nodeLikelihood* nodeVal, int totalNodeNum, const int seqLength) {
+__global__ void rootScoreCalc(float* treeSiteScore, int* node_level, elem_t* pi, nodeLikelihood* nodeVal, int totalNodeNum, const int seqLength) {
+    // const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    // if (idx >= seqLength)
+    //     return;
+
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= seqLength)
+    if (idx >= totalNodeNum)
         return;
-    treeSiteScore[idx] = siteLogLikelihood(nodeVal[idx * totalNodeNum + 0], pi);
+    const int seqcolIdx = blockIdx.y;
+    if (seqcolIdx >= seqLength)
+        return;
+        
+    if (node_level[idx] == 0)
+        treeSiteScore[seqcolIdx] = siteLogLikelihood(nodeVal[seqcolIdx * totalNodeNum + idx], pi);
 }
 
 
-elem_t cuda_maxll_score(char* seqs, int* treeArray, elem_t* treeLengthArray, int* node_level, elem_t* rate_mat, 
+void cuda_maxll_score(elem_t output_score, char* seqs, int* treeArray, elem_t* treeLengthArray, int* node_level, elem_t* rate_mat, 
                         elem_t* pi, int tree_total_node_num, int seq_length, int seq_num) {
 
     int h_max_depth = *std::max_element(node_level, node_level + tree_total_node_num);
@@ -166,7 +180,8 @@ elem_t cuda_maxll_score(char* seqs, int* treeArray, elem_t* treeLengthArray, int
         computePerSiteScore<<<computeMLSiteBlocks, computeMLSiteTPB>>>(d_nodeVal, d_expm_branch, d_treeArray, d_node_level,
                                                                     tree_total_node_num, seq_length, seq_num, curr_depth);
     }
-    rootScoreCalc<<<(seq_length + N_THREADS - 1)/N_THREADS, N_THREADS>>>(d_treeSiteScore, d_pi, d_nodeVal, tree_total_node_num, seq_length);
+    rootScoreCalc<<<computeMLSiteBlocks, computeMLSiteTPB>>>(d_treeSiteScore, d_node_level, d_pi, d_nodeVal, tree_total_node_num, seq_length);
+    // rootScoreCalc<<<(seq_length + N_THREADS - 1)/N_THREADS, N_THREADS>>>(d_treeSiteScore, d_pi, d_nodeVal, tree_total_node_num, seq_length);
 
     void     *d_temp_storage = NULL;
     size_t   temp_storage_bytes = 0;
@@ -175,10 +190,8 @@ elem_t cuda_maxll_score(char* seqs, int* treeArray, elem_t* treeLengthArray, int
     cudaMalloc(&d_temp_storage, temp_storage_bytes);
     // Run sum-reduction
     cub::DeviceReduce::Sum(d_temp_storage, temp_storage_bytes, d_treeSiteScore, d_odata, seq_length);
+    cudaMemcpy(&output_score, d_odata, sizeof(elem_t), cudaMemcpyDeviceToHost);
 
-    elem_t* h_odata = (elem_t *)malloc(sizeof(elem_t));
-    HANDLE_ERROR(cudaMemcpy(h_odata, d_odata, sizeof(elem_t), cudaMemcpyDeviceToHost));
-    
     cudaFree(d_pi);
     cudaFree(d_rate_mat);
     cudaFree(d_treeArray);
@@ -190,7 +203,5 @@ elem_t cuda_maxll_score(char* seqs, int* treeArray, elem_t* treeLengthArray, int
     cudaFree(d_treeSiteScore);
     cudaFree(d_nodeVal);
 
-    free(h_odata);
-
-    return h_odata[0];
+    return;
 }
