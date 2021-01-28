@@ -1293,47 +1293,47 @@ double PhyloTree::computeLikelihoodGPU() {
 
 double PhyloTree::computeLikelihood(double *pattern_lh) {
     
-//     ASSERT(model);
-//     ASSERT(site_rate);
-//     ASSERT(root->isLeaf());
-//     if (!current_it) {
-//         Node *leaf = findFarthestLeaf();
-//         current_it = (PhyloNeighbor*)leaf->neighbors[0];
-//         current_it_back = (PhyloNeighbor*)current_it->node->findNeighbor(leaf);
-// //        PhyloNeighbor *nei = ((PhyloNeighbor*) root->neighbors[0]);
-// //        current_it = nei;
-// //        assert(current_it);
-// //        current_it_back = (PhyloNeighbor*) nei->node->findNeighbor(root);
-// //        assert(current_it_back);
-//     }
-//     double score;
-// //    string root_name = ROOT_NAME;
-// //    Node *vroot = findLeafName(root_name);
-// //    if (root_state != aln->STATE_UNKNOWN && vroot) {
-// //        if (verbose_mode >= VB_DEBUG)
-// //            cout << __func__ << " HIT ROOT STATE " << endl;
-// //        score = computeLikelihoodRooted((PhyloNeighbor*) vroot->neighbors[0], (PhyloNode*) vroot);
-// //    } else {
-//         score = computeLikelihoodBranch(current_it, (PhyloNode*) current_it_back->node);
-// //    }
-//     if (pattern_lh)
-//         memmove(pattern_lh, _pattern_lh, aln->size() * sizeof(double));
+    ASSERT(model);
+    ASSERT(site_rate);
+    ASSERT(root->isLeaf());
+    if (!current_it) {
+        Node *leaf = findFarthestLeaf();
+        current_it = (PhyloNeighbor*)leaf->neighbors[0];
+        current_it_back = (PhyloNeighbor*)current_it->node->findNeighbor(leaf);
+//        PhyloNeighbor *nei = ((PhyloNeighbor*) root->neighbors[0]);
+//        current_it = nei;
+//        assert(current_it);
+//        current_it_back = (PhyloNeighbor*) nei->node->findNeighbor(root);
+//        assert(current_it_back);
+    }
+    double score;
+//    string root_name = ROOT_NAME;
+//    Node *vroot = findLeafName(root_name);
+//    if (root_state != aln->STATE_UNKNOWN && vroot) {
+//        if (verbose_mode >= VB_DEBUG)
+//            cout << __func__ << " HIT ROOT STATE " << endl;
+//        score = computeLikelihoodRooted((PhyloNeighbor*) vroot->neighbors[0], (PhyloNode*) vroot);
+//    } else {
+        score = computeLikelihoodGPU();
+        // score = computeLikelihoodBranch(current_it, (PhyloNode*) current_it_back->node);
+//    }
+    if (pattern_lh)
+        memmove(pattern_lh, _pattern_lh, aln->size() * sizeof(double));
 
-//     if (pattern_lh && current_it->lh_scale_factor < 0.0) {
-//         int nptn = aln->getNPattern();
-//         //double check_score = 0.0;
-//         for (int i = 0; i < nptn; i++) {
-//             pattern_lh[i] += max(current_it->scale_num[i], UBYTE(0)) * LOG_SCALING_THRESHOLD;
-//             //check_score += (pattern_lh[i] * (aln->at(i).frequency));
-//         }
-//         /*       if (fabs(score - check_score) > 1e-6) {
-//          cout << "score = " << score << " check_score = " << check_score << endl;
-//          outError("Scaling error ", __func__);
-//          }*/
-//     }
-//     curScore = score;
-    // return score;
-    return computeLikelihoodGPU();
+    if (pattern_lh && current_it->lh_scale_factor < 0.0) {
+        int nptn = aln->getNPattern();
+        //double check_score = 0.0;
+        for (int i = 0; i < nptn; i++) {
+            pattern_lh[i] += max(current_it->scale_num[i], UBYTE(0)) * LOG_SCALING_THRESHOLD;
+            //check_score += (pattern_lh[i] * (aln->at(i).frequency));
+        }
+        /*       if (fabs(score - check_score) > 1e-6) {
+         cout << "score = " << score << " check_score = " << check_score << endl;
+         outError("Scaling error ", __func__);
+         }*/
+    }
+    curScore = score;
+    return score;
 }
 
 //double PhyloTree::computeLikelihoodRooted(PhyloNeighbor *dad_branch, PhyloNode *dad) {
