@@ -34,6 +34,7 @@
 #include "model/modelmixture.h"
 #include "phylonodemixlen.h"
 #include "phylotreemixlen.h"
+#include "model/modelset.h"
 #include "kernels/kernels.cuh"
 
 const int LH_MIN_CONST = 1;
@@ -1271,11 +1272,39 @@ double PhyloTree::computeLikelihoodGPU() {
     // }
     // cout << endl;
 
-    elem_t rate_mat[16];
+    // elem_t rate_mat[16];
+    // for (int i = 0 ; i < 16; ++i) {
+    //     rate_mat[i] = 0.25;
+    // }
+    // elem_t pi[4] = {0.25, 0.25, 0.25, 0.25};
+
+    //get rate matrix
+    double *rate_mat = new double[model->num_states * model->num_states];
+    if (!model->isSiteSpecificModel())
+        model->getRateMatrix(rate_mat);
+    else
+        ((ModelSet*)model)->front()->getRateMatrix(rate_mat);
+    
+    //copy rate matrix 
+    elem_t rate_mat2[16];
     for (int i = 0 ; i < 16; ++i) {
-        rate_mat[i] = 0.25;
+        rate_mat2[i] = rate_mat[i];
+        cout << rate_mat2[i] << ", ";
     }
-    elem_t pi[4] = {0.25, 0.25, 0.25, 0.25};
+    cout << endl;
+
+    elem_t pi[4];
+
+    //get statefreqs
+    double *state_freqs = new double[model->num_states];
+    model->getStateFrequency(state_freqs);
+
+    //copy statefreqs
+    for (int i = 0; i < model->num_states; i++) {
+        pi[i] = state_freqs[i];
+        cout << state_freqs[i] << ", ";
+    }
+    cout << endl;
 
     int seq_num = aln->getNSeq();
     int seq_length = aln->getNSite();   
@@ -1283,7 +1312,7 @@ double PhyloTree::computeLikelihoodGPU() {
     strcpy(transpose, params->GPUtranspose.c_str());
 
     elem_t score = 0.0;
-    cuda_maxll_score(score, transpose, treeArray, treeLengthArray, nodeLevel, rate_mat, 
+    cuda_maxll_score(score, transpose, treeArray, treeLengthArray, nodeLevel, rate_mat2, 
                      pi, nodeNum, seq_length, seq_num);
     return score;
 
@@ -1405,7 +1434,8 @@ double PhyloTree::computePatternLhCat(SiteLoglType wsl) {
 
     double score;
 
-    score = computeLikelihoodBranch(current_it, (PhyloNode*)current_it_back->node);
+    // score = computeLikelihoodBranch(current_it, (PhyloNode*)current_it_back->node);
+    score = computeLikelihoodGPU();
     // TODO: SIMD aware
     transformPatternLhCat();
     /*
