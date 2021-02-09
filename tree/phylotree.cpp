@@ -1280,10 +1280,7 @@ double PhyloTree::computeLikelihoodGPU() {
 
     //get rate matrix
     double *rate_mat = new double[model->num_states * model->num_states];
-    if (!model->isSiteSpecificModel())
-        model->getRateMatrix(rate_mat);
-    else
-        ((ModelSet*)model)->front()->getRateMatrix(rate_mat);
+    model->getQMatrix(rate_mat);
     
     //copy rate matrix 
     elem_t rate_mat2[16];
