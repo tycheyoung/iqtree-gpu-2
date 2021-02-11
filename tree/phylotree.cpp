@@ -1286,9 +1286,9 @@ double PhyloTree::computeLikelihoodGPU() {
     elem_t rate_mat2[16];
     for (int i = 0 ; i < 16; ++i) {
         rate_mat2[i] = rate_mat[i];
-        cout << rate_mat2[i] << ", ";
+        //cout << rate_mat2[i] << ", ";
     }
-    cout << endl;
+    //cout << endl;
 
     elem_t pi[4];
 
@@ -1299,9 +1299,9 @@ double PhyloTree::computeLikelihoodGPU() {
     //copy statefreqs
     for (int i = 0; i < model->num_states; i++) {
         pi[i] = state_freqs[i];
-        cout << state_freqs[i] << ", ";
+        //cout << state_freqs[i] << ", ";
     }
-    cout << endl;
+    //cout << endl;
 
     int seq_num = aln->getNSeq();
     int seq_length = aln->getNSite();   

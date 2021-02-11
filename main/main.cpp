@@ -2720,8 +2720,10 @@ int main(int argc, char *argv[]) {
     }
 
     time(&start_time);
-    cout << "Date and Time: " << ctime(&start_time);
+    cout << "Date and Time: " << ctime(&start_time) << endl;
     delete checkpoint;
+
+    cout << "GPU version";
 
     finish_random();
     
