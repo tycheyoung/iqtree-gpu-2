@@ -3749,7 +3749,7 @@ void runPhyloAnalysis(Params &params, Checkpoint *checkpoint) {
     /*************** GPU Injection ********************/
     char transpose[params.GPUtranspose.length()+1];
     strcpy(transpose, params.GPUtranspose.c_str());
-    Foo::GPUInitialize(params, transpose, alignment->getNSite(), alignment->getNSeq());
+    GPUInitialize(params, transpose, alignment->getNSite(), alignment->getNSeq());
 
     /*************** initialize tree ********************/
     IQTree *tree = newIQTree(params, alignment);
@@ -3897,7 +3897,7 @@ void runPhyloAnalysis(Params &params, Checkpoint *checkpoint) {
     delete alignment;
 
     /*************** GPU Injection ********************/
-    Foo::GPUDestroy(params);
+    GPUDestroy(params);
 
 
     checkpoint->putBool("finished", true);

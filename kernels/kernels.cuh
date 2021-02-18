@@ -36,12 +36,11 @@ static void HandleError( cudaError_t err,
                                     __FILE__, __LINE__ ); \
                             exit( EXIT_FAILURE );}}
 
-namespace Foo
-{
+
 void GPUInitialize(Params &params, char* transpose, int seq_length, int seq_num);
 void GPUDestroy(Params &params);
 
 void cuda_maxll_score(elem_t& output_score, Params &params, int* treeArray, elem_t* treeLengthArray, int* node_level, elem_t* rate_mat, 
                     elem_t* pi, int tree_total_node_num, int seq_length, int seq_num);
-}
+
 #endif

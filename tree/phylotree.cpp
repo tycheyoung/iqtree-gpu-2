@@ -1310,7 +1310,7 @@ double PhyloTree::computeLikelihoodGPU() {
 
 
     elem_t score = 0.0;
-    Foo::cuda_maxll_score(score, Params::getInstance(), treeArray, treeLengthArray, nodeLevel, rate_mat2, 
+    cuda_maxll_score(score, Params::getInstance(), treeArray, treeLengthArray, nodeLevel, rate_mat2, 
                      pi, nodeNum, seq_length, seq_num);
     return score;
 
