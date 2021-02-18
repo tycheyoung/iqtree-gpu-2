@@ -432,32 +432,25 @@ Alignment::Alignment(char *filename, char *sequence_type, InputType &intype, str
         if (intype == IN_NEXUS) {
             cout << "Nexus format detected" << endl;
             readNexus(filename);
-            computeTranspose(this);
         } else if (intype == IN_FASTA) {
             cout << "Fasta format detected" << endl;
             readFasta(filename, sequence_type);
-            computeTranspose(this);
         } else if (intype == IN_PHYLIP) {
             cout << "Phylip format detected" << endl;
             if (Params::getInstance().phylip_sequential_format) {
                 readPhylipSequential(filename, sequence_type);
-                computeTranspose(this);
             } else {
                 readPhylip(filename, sequence_type);
-                computeTranspose(this);
             }
         } else if (intype == IN_COUNTS) {
             cout << "Counts format (PoMo) detected" << endl;
             readCountsFormat(filename, sequence_type);
-            computeTranspose(this);
         } else if (intype == IN_CLUSTAL) {
             cout << "Clustal format detected" << endl;
             readClustal(filename, sequence_type);
-            computeTranspose(this);
         } else if (intype == IN_MSF) {
             cout << "MSF format detected" << endl;
             readMSF(filename, sequence_type);
-            computeTranspose(this);
         } else {
             outError("Unknown sequence format, please use PHYLIP, FASTA, CLUSTAL, MSF, or NEXUS format");
         }
@@ -468,6 +461,8 @@ Alignment::Alignment(char *filename, char *sequence_type, InputType &intype, str
     } catch (string str) {
         outError(str);
     }
+
+    computeTranspose(this);
 
     if (getNSeq() < 3)
         outError("Alignment must have at least 3 sequences");
