@@ -62,6 +62,8 @@
 #include "utils/MPIHelper.h"
 #include "timetree.h"
 
+#include "kernels/kernels.cuh"
+
 #ifdef USE_BOOSTER
 extern "C" {
 #include "booster/booster.h"
@@ -3744,6 +3746,11 @@ void runPhyloAnalysis(Params &params, Checkpoint *checkpoint) {
         cout << "Alignment sites statistics printed to " << site_info_file << endl;
     }
 
+    /*************** GPU Injection ********************/
+    char transpose[params.GPUtranspose.length()+1];
+    strcpy(transpose, params.GPUtranspose.c_str());
+    Foo::GPUInitialize(params, transpose, alignment->getNSite(), alignment->getNSeq());
+
     /*************** initialize tree ********************/
     IQTree *tree = newIQTree(params, alignment);
     
@@ -3888,6 +3895,10 @@ void runPhyloAnalysis(Params &params, Checkpoint *checkpoint) {
     // 2015-09-22: THIS IS STUPID: after deleting tree, one cannot access tree->aln anymore
 //    alignment = tree->aln;
     delete alignment;
+
+    /*************** GPU Injection ********************/
+    Foo::GPUDestroy(params);
+
 
     checkpoint->putBool("finished", true);
     checkpoint->dump(true);

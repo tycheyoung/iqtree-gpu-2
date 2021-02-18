@@ -1305,11 +1305,12 @@ double PhyloTree::computeLikelihoodGPU() {
 
     int seq_num = aln->getNSeq();
     int seq_length = aln->getNSite();   
-    char transpose[params->GPUtranspose.length()+1];
-    strcpy(transpose, params->GPUtranspose.c_str());
+    // char transpose[params->GPUtranspose.length()+1];
+    // strcpy(transpose, params->GPUtranspose.c_str());
+
 
     elem_t score = 0.0;
-    cuda_maxll_score(score, transpose, treeArray, treeLengthArray, nodeLevel, rate_mat2, 
+    Foo::cuda_maxll_score(score, Params::getInstance(), treeArray, treeLengthArray, nodeLevel, rate_mat2, 
                      pi, nodeNum, seq_length, seq_num);
     return score;
 

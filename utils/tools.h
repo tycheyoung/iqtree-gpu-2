@@ -47,6 +47,8 @@
 #define SPRNG
 #include "sprng/sprng.h"
 
+#include "kernels/datatype.cuh"
+
 // redefine assertion
 inline void _my_assert(const char* expression, const char *func, const char* file, int line)
 {
@@ -548,8 +550,23 @@ private:
     //void operator=(Params const&) {}; // Disable assignment
 public:
 
+    /////////////////////////// Injected variables /////////////////////////
     string GPUseqs;
     string GPUtranspose;
+
+    // GPU Readable code
+    char* d_seqs;
+    elem_t* d_odata;
+//     elem_t* d_expm_branch;
+    elem_t* d_treeSiteScore;
+//     nodeLikelihood* d_nodeVal;
+    elem_t* d_pi;
+    elem_t* d_rate_mat;
+//     int* d_treeArray;
+//     int* d_node_level;
+//     elem_t* d_treeLengthArray;
+
+    ////////////////////////////////////////////////////////////////////////
 
     /**
     *  Fast and accurate optimiation for alpha and p_invar

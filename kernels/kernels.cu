@@ -122,26 +122,82 @@ __global__ void rootScoreCalc(float* treeSiteScore, int* node_level, elem_t* pi,
         treeSiteScore[seqcolIdx] = siteLogLikelihood(nodeVal[seqcolIdx * totalNodeNum + idx], pi);
 }
 
+void GPUInitialize(Params &params, char* transpose, int seq_length, int seq_num) {
 
-void cuda_maxll_score(elem_t& output_score, char* seqs, int* treeArray, elem_t* treeLengthArray, int* node_level, elem_t* rate_mat, 
-                        elem_t* pi, int tree_total_node_num, int seq_length, int seq_num) {
-
-    int h_max_depth = *std::max_element(node_level, node_level + tree_total_node_num);
-    
+    // GPU Allocation
     char* d_seqs = NULL;
     HANDLE_ERROR(cudaMalloc((void **)&d_seqs, seq_length * seq_num * sizeof(char)));
     elem_t* d_odata = NULL;
     HANDLE_ERROR(cudaMalloc((void **)&d_odata, sizeof(elem_t)));
-    elem_t* d_expm_branch = NULL;
-    HANDLE_ERROR(cudaMalloc((void **)&d_expm_branch, 16 * tree_total_node_num * sizeof(elem_t)));
+    // elem_t* d_expm_branch = NULL;
+    // HANDLE_ERROR(cudaMalloc((void **)&d_expm_branch, 16 * tree_total_node_num * sizeof(elem_t)));
     elem_t* d_treeSiteScore = NULL;
     HANDLE_ERROR(cudaMalloc((void **)&d_treeSiteScore, seq_length * sizeof(elem_t)));
-    nodeLikelihood* d_nodeVal = NULL;
-    HANDLE_ERROR(cudaMalloc((void **)&d_nodeVal, seq_length * tree_total_node_num * sizeof(nodeLikelihood)));
+    // nodeLikelihood* d_nodeVal = NULL;
+    // HANDLE_ERROR(cudaMalloc((void **)&d_nodeVal, seq_length * tree_total_node_num * sizeof(nodeLikelihood)));
     elem_t* d_pi = NULL;
     HANDLE_ERROR(cudaMalloc((void **)&d_pi, 4 * sizeof(elem_t)));
     elem_t* d_rate_mat = NULL;
     HANDLE_ERROR(cudaMalloc((void **)&d_rate_mat, 16 * sizeof(elem_t)));
+    // int* d_treeArray = NULL;
+    // HANDLE_ERROR(cudaMalloc((void **)&d_treeArray, tree_total_node_num * sizeof(int)));
+    // int* d_node_level = NULL;
+    // HANDLE_ERROR(cudaMalloc((void **)&d_node_level, tree_total_node_num * sizeof(int)));
+    // elem_t* d_treeLengthArray = NULL;
+    // HANDLE_ERROR(cudaMalloc((void **)&d_treeLengthArray, tree_total_node_num * sizeof(elem_t)));
+
+    // Pass pointer to the Params
+    params.d_seqs = d_seqs;
+    params.d_odata = d_odata;
+    // params.d_expm_branch = d_expm_branch;
+    params.d_treeSiteScore = d_treeSiteScore;
+    // params.d_nodeVal = d_nodeVal;
+    params.d_pi = d_pi;
+    params.d_rate_mat = d_rate_mat;
+    // params.d_treeArray = d_treeArray;
+    // params.d_node_level = d_node_level;
+    // params.d_treeLengthArray = d_treeLengthArray;
+
+    // Copy sequences
+    HANDLE_ERROR(cudaMemcpy(d_seqs, transpose, seq_length * seq_num * sizeof(char), cudaMemcpyHostToDevice));
+
+    return;
+}
+
+
+void GPUDestroy(Params &params) {
+    HANDLE_ERROR(cudaFree(params.d_seqs));
+    HANDLE_ERROR(cudaFree(params.d_odata));
+    // HANDLE_ERROR(cudaFree(params.d_expm_branch));
+    HANDLE_ERROR(cudaFree(params.d_treeSiteScore));
+    // HANDLE_ERROR(cudaFree(params.d_nodeVal));
+    HANDLE_ERROR(cudaFree(params.d_pi));
+    HANDLE_ERROR(cudaFree(params.d_rate_mat));
+    // HANDLE_ERROR(cudaFree(params.d_treeArray));
+    // HANDLE_ERROR(cudaFree(params.d_node_level));
+    // HANDLE_ERROR(cudaFree(params.d_treeLengthArray));
+}
+
+void cuda_maxll_score(elem_t& output_score, Params &params, int* treeArray, elem_t* treeLengthArray, int* node_level, elem_t* rate_mat, 
+                        elem_t* pi, int tree_total_node_num, int seq_length, int seq_num) {
+
+    int h_max_depth = *std::max_element(node_level, node_level + tree_total_node_num);
+
+    char* d_seqs = params.d_seqs;
+    elem_t* d_odata = params.d_odata;
+    // elem_t* d_expm_branch = params.d_expm_branch;
+    elem_t* d_treeSiteScore = params.d_treeSiteScore;
+    // nodeLikelihood* d_nodeVal = params.d_nodeVal;
+    elem_t* d_pi = params.d_pi;
+    elem_t* d_rate_mat = params.d_rate_mat;
+    // int* d_treeArray = params.d_treeArray;
+    // int* d_node_level = params.d_node_level;
+    // elem_t* d_treeLengthArray = params.d_treeLengthArray;
+
+    elem_t* d_expm_branch = NULL;
+    HANDLE_ERROR(cudaMalloc((void **)&d_expm_branch, 16 * tree_total_node_num * sizeof(elem_t)));
+    nodeLikelihood* d_nodeVal = NULL;
+    HANDLE_ERROR(cudaMalloc((void **)&d_nodeVal, seq_length * tree_total_node_num * sizeof(nodeLikelihood)));
     int* d_treeArray = NULL;
     HANDLE_ERROR(cudaMalloc((void **)&d_treeArray, tree_total_node_num * sizeof(int)));
     int* d_node_level = NULL;
@@ -153,7 +209,6 @@ void cuda_maxll_score(elem_t& output_score, char* seqs, int* treeArray, elem_t* 
     HANDLE_ERROR(cudaMemcpy(d_rate_mat, rate_mat, 16 * sizeof(elem_t), cudaMemcpyHostToDevice));
     HANDLE_ERROR(cudaMemcpy(d_treeArray, treeArray, tree_total_node_num * sizeof(int), cudaMemcpyHostToDevice));
     HANDLE_ERROR(cudaMemcpy(d_node_level, node_level, tree_total_node_num * sizeof(int), cudaMemcpyHostToDevice));
-    HANDLE_ERROR(cudaMemcpy(d_seqs, seqs, seq_length * seq_num * sizeof(char), cudaMemcpyHostToDevice));
     HANDLE_ERROR(cudaMemcpy(d_treeLengthArray, treeLengthArray, tree_total_node_num * sizeof(elem_t), cudaMemcpyHostToDevice));
     
     /// Kernel Launch ///
@@ -178,16 +233,16 @@ void cuda_maxll_score(elem_t& output_score, char* seqs, int* treeArray, elem_t* 
     cub::DeviceReduce::Sum(d_temp_storage, temp_storage_bytes, d_treeSiteScore, d_odata, seq_length);
     cudaMemcpy(&output_score, d_odata, sizeof(elem_t), cudaMemcpyDeviceToHost);
 
-    cudaFree(d_pi);
-    cudaFree(d_rate_mat);
-    cudaFree(d_treeArray);
-    cudaFree(d_treeLengthArray);
-    cudaFree(d_node_level);
-    cudaFree(d_expm_branch);
-    cudaFree(d_odata);
-    cudaFree(d_seqs);
-    cudaFree(d_treeSiteScore);
-    cudaFree(d_nodeVal);
+    // HANDLE_ERROR(cudaFree(params.d_seqs));
+    // HANDLE_ERROR(cudaFree(params.d_odata));
+    HANDLE_ERROR(cudaFree(d_expm_branch));
+    // HANDLE_ERROR(cudaFree(params.d_treeSiteScore));
+    HANDLE_ERROR(cudaFree(d_nodeVal));
+    // HANDLE_ERROR(cudaFree(params.d_pi));
+    // HANDLE_ERROR(cudaFree(params.d_rate_mat));
+    HANDLE_ERROR(cudaFree(d_treeArray));
+    HANDLE_ERROR(cudaFree(d_node_level));
+    HANDLE_ERROR(cudaFree(d_treeLengthArray));
 
     return;
 }
