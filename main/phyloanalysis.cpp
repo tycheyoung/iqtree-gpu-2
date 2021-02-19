@@ -3747,7 +3747,7 @@ void runPhyloAnalysis(Params &params, Checkpoint *checkpoint) {
     }
 
     /*************** GPU Injection ********************/
-    char transpose[params.GPUtranspose.length()+1];
+    char* transpose = new char[params.GPUtranspose.length()+1];
     strcpy(transpose, params.GPUtranspose.c_str());
     GPUInitialize(params, transpose, alignment->getNSite(), alignment->getNSeq());
 

@@ -400,7 +400,8 @@ void Alignment::checkGappySeq(bool force_error) {
 void computeTranspose(Alignment *aln) {
     int seq_num = aln->getNSeq();
     int seq_length = aln->getNSite();   
-    char seq_transpose_concat[seq_num * seq_length];
+    char* seq_transpose_concat = new char[seq_num * seq_length];
+    //char seq_transpose_concat[seq_num * seq_length];
     for (int i = 0; i < seq_num; i++) {
         for (int j = 0 ; j < seq_length ; j++) {
             seq_transpose_concat[j * seq_num + i] = Params::getInstance().GPUseqs[i * seq_length + j];
