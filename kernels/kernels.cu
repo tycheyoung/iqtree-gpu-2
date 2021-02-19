@@ -218,8 +218,8 @@ void cuda_maxll_score(elem_t& output_score, Params &params, int* treeArray, elem
     // int* d_node_level = params.d_node_level;
     // elem_t* d_treeLengthArray = params.d_treeLengthArray;
 
-    elem_t* d_expm_branch = NULL;
-    HANDLE_ERROR(cudaMalloc((void **)&d_expm_branch, 16 * tree_total_node_num * sizeof(elem_t)));
+    // elem_t* d_expm_branch = NULL;
+    // HANDLE_ERROR(cudaMalloc((void **)&d_expm_branch, 16 * tree_total_node_num * sizeof(elem_t)));
     nodeLikelihood* d_nodeVal = NULL;
     HANDLE_ERROR(cudaMalloc((void **)&d_nodeVal, seq_length * tree_total_node_num * sizeof(nodeLikelihood)));
     int* d_treeArray = NULL;
@@ -259,7 +259,7 @@ void cuda_maxll_score(elem_t& output_score, Params &params, int* treeArray, elem
 
     // HANDLE_ERROR(cudaFree(params.d_seqs));
     // HANDLE_ERROR(cudaFree(params.d_odata));
-    HANDLE_ERROR(cudaFree(d_expm_branch));
+    // HANDLE_ERROR(cudaFree(d_expm_branch));
     // HANDLE_ERROR(cudaFree(params.d_treeSiteScore));
     HANDLE_ERROR(cudaFree(d_nodeVal));
     // HANDLE_ERROR(cudaFree(params.d_pi));
