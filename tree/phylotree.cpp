@@ -1308,10 +1308,13 @@ double PhyloTree::computeLikelihoodGPU() {
     // char transpose[params->GPUtranspose.length()+1];
     // strcpy(transpose, params->GPUtranspose.c_str());
 
-
     elem_t score = 0.0;
     cuda_maxll_score(score, Params::getInstance(), treeArray, treeLengthArray, nodeLevel, rate_mat2, 
                      pi, nodeNum, seq_length, seq_num);
+    
+    delete[] rate_mat;
+    delete[] state_freqs;
+
     return score;
 
 }
