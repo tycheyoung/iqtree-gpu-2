@@ -1,6 +1,8 @@
 #include "kernels.cuh"
 #include "cub/cub.cuh"
 
+#define MIN(x, y) ((x < y) ? x : y)
+
 __device__ __forceinline__ elem_t siteLogLikelihood(nodeLikelihood root, elem_t* pi) {
     nodeLikelihood pi_root_sh;  //shift by exp(500)
     elem_t shift_max = -_MAX(_MAX(root.A, root.C), _MAX(root.G, root.T));
@@ -76,9 +78,9 @@ __global__ void computePerSiteScore(nodeLikelihood* nodeVal, elem_t* treeLengthA
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= totalNodeNum)
         return;
-    const int seqcolIdx = blockIdx.y;
-    if (seqcolIdx >= seqLength)
-        return;
+    // const int seqcolIdx = blockIdx.y;
+    // if (seqcolIdx >= seqLength)
+    //     return;
         
     __shared__ elem_t rate_mat_cache[16];
     const int tid = threadIdx.x;
@@ -98,28 +100,31 @@ __global__ void computePerSiteScore(nodeLikelihood* nodeVal, elem_t* treeLengthA
             //+ __powf(edge_length, 2) * d_rate_mat_square[ii] / 2 + __powf(edge_length, 3) * d_rate_mat_cubic[ii] / 6 ;
     }
 
-    if (node_level[idx] == curr_depth) {
-        int parent_ = treeArray[idx];
-        nodeLikelihood child = nodeVal[seqcolIdx * totalNodeNum + idx];
-        nodeLikelihood shft_child;
+    for (int seqcolIdx = blockIdx.y; seqcolIdx < seqLength; seqcolIdx += blockDim.y * gridDim.y) 
+    {
+        if (node_level[idx] == curr_depth) {
+            int parent_ = treeArray[idx];
+            nodeLikelihood child = nodeVal[seqcolIdx * totalNodeNum + idx];
+            nodeLikelihood shft_child;
 
-        elem_t shift_max = -_MAX(_MAX(child.A, child.C), _MAX(child.G, child.T));
-        // elem_t* expm_p = expm_branch + idx * 16;
+            elem_t shift_max = -_MAX(_MAX(child.A, child.C), _MAX(child.G, child.T));
+            // elem_t* expm_p = expm_branch + idx * 16;
 
-        shft_child.A = __expf(child.A + shift_max);
-        shft_child.C = __expf(child.C + shift_max);
-        shft_child.G = __expf(child.G + shift_max);
-        shft_child.T = __expf(child.T + shift_max);
-        
-        atomicAdd(&(nodeVal[seqcolIdx * totalNodeNum + parent_].A), __logf(expm_p[0] * shft_child.A + expm_p[4] * shft_child.C + expm_p[8]  * shft_child.G + expm_p[12] * shft_child.T)-shift_max);
-        atomicAdd(&(nodeVal[seqcolIdx * totalNodeNum + parent_].C), __logf(expm_p[1] * shft_child.A + expm_p[5] * shft_child.C + expm_p[9]  * shft_child.G + expm_p[13] * shft_child.T)-shift_max);
-        atomicAdd(&(nodeVal[seqcolIdx * totalNodeNum + parent_].G), __logf(expm_p[2] * shft_child.A + expm_p[6] * shft_child.C + expm_p[10] * shft_child.G + expm_p[14] * shft_child.T)-shift_max);
-        atomicAdd(&(nodeVal[seqcolIdx * totalNodeNum + parent_].T), __logf(expm_p[3] * shft_child.A + expm_p[7] * shft_child.C + expm_p[11] * shft_child.G + expm_p[15] * shft_child.T)-shift_max);
-        // if (seqcolIdx == 0) {
-        //     for (int i = 0 ; i < 50; ++i) {
-        //         printf("%f %f %f %f \n", nodeVal[seqcolIdx * totalNodeNum + parent_].A, nodeVal[seqcolIdx * totalNodeNum + parent_].C, nodeVal[seqcolIdx * totalNodeNum + parent_].G, nodeVal[seqcolIdx * totalNodeNum + parent_].T);
-        //     } printf("\n");
-        // }
+            shft_child.A = __expf(child.A + shift_max);
+            shft_child.C = __expf(child.C + shift_max);
+            shft_child.G = __expf(child.G + shift_max);
+            shft_child.T = __expf(child.T + shift_max);
+            
+            atomicAdd(&(nodeVal[seqcolIdx * totalNodeNum + parent_].A), __logf(expm_p[0] * shft_child.A + expm_p[4] * shft_child.C + expm_p[8]  * shft_child.G + expm_p[12] * shft_child.T)-shift_max);
+            atomicAdd(&(nodeVal[seqcolIdx * totalNodeNum + parent_].C), __logf(expm_p[1] * shft_child.A + expm_p[5] * shft_child.C + expm_p[9]  * shft_child.G + expm_p[13] * shft_child.T)-shift_max);
+            atomicAdd(&(nodeVal[seqcolIdx * totalNodeNum + parent_].G), __logf(expm_p[2] * shft_child.A + expm_p[6] * shft_child.C + expm_p[10] * shft_child.G + expm_p[14] * shft_child.T)-shift_max);
+            atomicAdd(&(nodeVal[seqcolIdx * totalNodeNum + parent_].T), __logf(expm_p[3] * shft_child.A + expm_p[7] * shft_child.C + expm_p[11] * shft_child.G + expm_p[15] * shft_child.T)-shift_max);
+            // if (seqcolIdx == 0) {
+            //     for (int i = 0 ; i < 50; ++i) {
+            //         printf("%f %f %f %f \n", nodeVal[seqcolIdx * totalNodeNum + parent_].A, nodeVal[seqcolIdx * totalNodeNum + parent_].C, nodeVal[seqcolIdx * totalNodeNum + parent_].G, nodeVal[seqcolIdx * totalNodeNum + parent_].T);
+            //     } printf("\n");
+            // }
+        }
     }
 }
 
@@ -131,9 +136,9 @@ __global__ void rootScoreCalc(float* treeSiteScore, int* node_level, elem_t* pi,
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= totalNodeNum)
         return;
-    const int seqcolIdx = blockIdx.y;
-    if (seqcolIdx >= seqLength)
-        return;
+    // const int seqcolIdx = blockIdx.y;
+    // if (seqcolIdx >= seqLength)
+    //     return;
         
     __shared__ elem_t pi_cache[4];
     const int tid = threadIdx.x;
@@ -142,8 +147,11 @@ __global__ void rootScoreCalc(float* treeSiteScore, int* node_level, elem_t* pi,
     }
     __syncthreads();
 
-    if (node_level[idx] == 0)
-        treeSiteScore[seqcolIdx] = siteLogLikelihood(nodeVal[seqcolIdx * totalNodeNum + idx], pi_cache);
+    for (int seqcolIdx = blockIdx.y; seqcolIdx < seqLength; seqcolIdx += blockDim.y * gridDim.y) 
+    {
+        if (node_level[idx] == 0)
+            treeSiteScore[seqcolIdx] = siteLogLikelihood(nodeVal[seqcolIdx * totalNodeNum + idx], pi_cache);
+    }
 }
 
 void GPUInitialize(Params &params, char* transpose, int seq_length, int seq_num) {
@@ -205,6 +213,9 @@ void GPUDestroy(Params &params) {
 void cuda_maxll_score(elem_t& output_score, Params &params, int* treeArray, elem_t* treeLengthArray, int* node_level, elem_t* rate_mat, 
                         elem_t* pi, int tree_total_node_num, int seq_length, int seq_num) {
 
+    cudaDeviceProp prop;
+    cudaGetDeviceProperties( &prop, 0);
+
     int h_max_depth = *std::max_element(node_level, node_level + tree_total_node_num);
 
     char* d_seqs = params.d_seqs;
@@ -236,7 +247,7 @@ void cuda_maxll_score(elem_t& output_score, Params &params, int* treeArray, elem
     HANDLE_ERROR(cudaMemcpy(d_treeLengthArray, treeLengthArray, tree_total_node_num * sizeof(elem_t), cudaMemcpyHostToDevice));
     
     /// Kernel Launch ///
-    dim3 computeMLSiteBlocks((tree_total_node_num + N_THREADS - 1) / N_THREADS, seq_length);
+    dim3 computeMLSiteBlocks((tree_total_node_num + N_THREADS - 1) / N_THREADS, MIN(seq_length, prop.maxGridSize[1]));
     dim3 computeMLSiteTPB(N_THREADS, 1, 1);
 
     // build_expm<<<(tree_total_node_num+N_THREADS-1)/N_THREADS , N_THREADS>>>(d_expm_branch, d_treeLengthArray, d_rate_mat, tree_total_node_num);
