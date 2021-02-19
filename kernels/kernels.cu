@@ -31,28 +31,27 @@ __device__ __forceinline__ nodeLikelihood constructBaseLeaf(int encodedBase) {
 }
 
 
-
-__global__ void build_expm(elem_t* expm_branch, elem_t* treeLengthArray, elem_t* d_rate_mat, const int totalNodeNum) {
-    // let's assume that expm(At) = I + At, approximation by taylor expansion
-    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= totalNodeNum)
-        return;
+// __global__ void build_expm(elem_t* expm_branch, elem_t* treeLengthArray, elem_t* d_rate_mat, const int totalNodeNum) {
+//     // let's assume that expm(At) = I + At, approximation by taylor expansion
+//     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+//     if (idx >= totalNodeNum)
+//         return;
     
-    elem_t edge_length = treeLengthArray[idx];
-    for (int ii = 0; ii < 16; ii++) {
-        if (ii == 0 || ii == 5 || ii == 10 || ii == 15)  // diagonal
-            expm_branch[idx * 16 + ii] = 1 + (edge_length * d_rate_mat[ii]) ; 
-            //+ __powf(edge_length, 2) * d_rate_mat_square[ii] / 2 + __powf(edge_length, 3) * d_rate_mat_cubic[ii] / 6 ;
-        else
-            expm_branch[idx * 16 + ii] = (edge_length * d_rate_mat[ii]) ; 
-            //+ __powf(edge_length, 2) * d_rate_mat_square[ii] / 2 + __powf(edge_length, 3) * d_rate_mat_cubic[ii] / 6 ;
-    }
-    return;
-}
+//     elem_t edge_length = treeLengthArray[idx];
+//     for (int ii = 0; ii < 16; ii++) {
+//         if (ii == 0 || ii == 5 || ii == 10 || ii == 15)  // diagonal
+//             expm_branch[idx * 16 + ii] = 1 + (edge_length * d_rate_mat[ii]) ; 
+//             //+ __powf(edge_length, 2) * d_rate_mat_square[ii] / 2 + __powf(edge_length, 3) * d_rate_mat_cubic[ii] / 6 ;
+//         else
+//             expm_branch[idx * 16 + ii] = (edge_length * d_rate_mat[ii]) ; 
+//             //+ __powf(edge_length, 2) * d_rate_mat_square[ii] / 2 + __powf(edge_length, 3) * d_rate_mat_cubic[ii] / 6 ;
+//     }
+//     return;
+// }
 
 
 
-__global__ void nodeValInit(nodeLikelihood* nodeVal, char* seq, int* node_level, int totalNodeNum, 
+__global__ void nodeValInit(nodeLikelihood* nodeVal, char* __restrict__ seq, int* node_level, int totalNodeNum, 
                             int seqLength, int seqNum) {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= totalNodeNum)
@@ -71,7 +70,7 @@ __global__ void nodeValInit(nodeLikelihood* nodeVal, char* seq, int* node_level,
 }
 
 
-__global__ void computePerSiteScore(nodeLikelihood* nodeVal, elem_t* __restrict__ expm_branch, 
+__global__ void computePerSiteScore(nodeLikelihood* nodeVal, elem_t* treeLengthArray, elem_t* d_rate_mat, 
                                     int* __restrict__ treeArray, int* __restrict__ node_level,
                                     int totalNodeNum, int seqLength, int seqNum, int curr_depth) {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -80,6 +79,24 @@ __global__ void computePerSiteScore(nodeLikelihood* nodeVal, elem_t* __restrict_
     const int seqcolIdx = blockIdx.y;
     if (seqcolIdx >= seqLength)
         return;
+        
+    __shared__ elem_t rate_mat_cache[16];
+    const int tid = threadIdx.x;
+    if (tid < 16) {
+        rate_mat_cache[tid] = d_rate_mat[tid];
+    }
+    __syncthreads();
+
+    elem_t edge_length = treeLengthArray[idx];
+    elem_t expm_p[16];
+    for (int ii = 0 ; ii < 16; ii ++) {
+        if (ii == 0 || ii == 5 || ii == 10 || ii == 15)  // diagonal
+            expm_p[ii] = 1 + (edge_length * rate_mat_cache[ii]) ; 
+            //+ __powf(edge_length, 2) * d_rate_mat_square[ii] / 2 + __powf(edge_length, 3) * d_rate_mat_cubic[ii] / 6 ;
+        else
+            expm_p[ii] = (edge_length * rate_mat_cache[ii]) ; 
+            //+ __powf(edge_length, 2) * d_rate_mat_square[ii] / 2 + __powf(edge_length, 3) * d_rate_mat_cubic[ii] / 6 ;
+    }
 
     if (node_level[idx] == curr_depth) {
         int parent_ = treeArray[idx];
@@ -87,7 +104,7 @@ __global__ void computePerSiteScore(nodeLikelihood* nodeVal, elem_t* __restrict_
         nodeLikelihood shft_child;
 
         elem_t shift_max = -_MAX(_MAX(child.A, child.C), _MAX(child.G, child.T));
-        elem_t* expm_p = expm_branch + idx * 16;
+        // elem_t* expm_p = expm_branch + idx * 16;
 
         shft_child.A = __expf(child.A + shift_max);
         shft_child.C = __expf(child.C + shift_max);
@@ -118,8 +135,15 @@ __global__ void rootScoreCalc(float* treeSiteScore, int* node_level, elem_t* pi,
     if (seqcolIdx >= seqLength)
         return;
         
+    __shared__ elem_t pi_cache[4];
+    const int tid = threadIdx.x;
+    if (tid < 4) {
+        pi_cache[tid] = pi[tid];
+    }
+    __syncthreads();
+
     if (node_level[idx] == 0)
-        treeSiteScore[seqcolIdx] = siteLogLikelihood(nodeVal[seqcolIdx * totalNodeNum + idx], pi);
+        treeSiteScore[seqcolIdx] = siteLogLikelihood(nodeVal[seqcolIdx * totalNodeNum + idx], pi_cache);
 }
 
 void GPUInitialize(Params &params, char* transpose, int seq_length, int seq_num) {
@@ -215,10 +239,10 @@ void cuda_maxll_score(elem_t& output_score, Params &params, int* treeArray, elem
     dim3 computeMLSiteBlocks((tree_total_node_num + N_THREADS - 1) / N_THREADS, seq_length);
     dim3 computeMLSiteTPB(N_THREADS, 1, 1);
 
-    build_expm<<<(tree_total_node_num+N_THREADS-1)/N_THREADS , N_THREADS>>>(d_expm_branch, d_treeLengthArray, d_rate_mat, tree_total_node_num);
+    // build_expm<<<(tree_total_node_num+N_THREADS-1)/N_THREADS , N_THREADS>>>(d_expm_branch, d_treeLengthArray, d_rate_mat, tree_total_node_num);
     nodeValInit<<<computeMLSiteBlocks, computeMLSiteTPB>>>(d_nodeVal, d_seqs, d_node_level, tree_total_node_num, seq_length, seq_num);
     for (int curr_depth = h_max_depth; curr_depth > 0; curr_depth--) {
-        computePerSiteScore<<<computeMLSiteBlocks, computeMLSiteTPB>>>(d_nodeVal, d_expm_branch, d_treeArray, d_node_level,
+        computePerSiteScore<<<computeMLSiteBlocks, computeMLSiteTPB>>>(d_nodeVal, d_treeLengthArray, d_rate_mat, d_treeArray, d_node_level,
                                                                     tree_total_node_num, seq_length, seq_num, curr_depth);
     }
     rootScoreCalc<<<computeMLSiteBlocks, computeMLSiteTPB>>>(d_treeSiteScore, d_node_level, d_pi, d_nodeVal, tree_total_node_num, seq_length);
