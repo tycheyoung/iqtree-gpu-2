@@ -266,6 +266,9 @@ void cuda_maxll_score(elem_t& output_score, Params &params, int* treeArray, elem
     cudaMalloc(&d_temp_storage, temp_storage_bytes);
     // Run sum-reduction
     cub::DeviceReduce::Sum(d_temp_storage, temp_storage_bytes, d_treeSiteScore, d_odata, seq_length);
+    HANDLE_ERROR(cudaDeviceSynchronize());
+    HANDLE_ERROR(cudaFree(d_temp_storage));
+    
     cudaMemcpy(&output_score, d_odata, sizeof(elem_t), cudaMemcpyDeviceToHost);
 
     // HANDLE_ERROR(cudaFree(params.d_seqs));
