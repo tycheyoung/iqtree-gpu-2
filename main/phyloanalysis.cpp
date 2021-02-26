@@ -3899,7 +3899,6 @@ void runPhyloAnalysis(Params &params, Checkpoint *checkpoint) {
     /*************** GPU Injection ********************/
     GPUDestroy(params);
     free(transpose);
-    free(&params.GPUtranspose);
 
     checkpoint->putBool("finished", true);
     checkpoint->dump(true);
