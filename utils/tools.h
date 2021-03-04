@@ -562,6 +562,8 @@ public:
 //     nodeLikelihood* d_nodeVal;
     elem_t* d_pi;
     elem_t* d_rate_mat;
+    elem_t* d_rate_mat_square;
+    elem_t* d_rate_mat_cubic;
 //     int* d_treeArray;
 //     int* d_node_level;
 //     elem_t* d_treeLengthArray;

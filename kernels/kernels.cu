@@ -72,7 +72,8 @@ __global__ void nodeValInit(nodeLikelihood* nodeVal, char* __restrict__ seq, int
 }
 
 
-__global__ void computePerSiteScore(nodeLikelihood* nodeVal, elem_t* treeLengthArray, elem_t* d_rate_mat, 
+__global__ void computePerSiteScore(nodeLikelihood* nodeVal, elem_t* treeLengthArray, 
+                                    elem_t* d_rate_mat, elem_t* d_rate_mat_square, elem_t* d_rate_mat_cubic, 
                                     int* __restrict__ treeArray, int* __restrict__ node_level,
                                     int totalNodeNum, int seqLength, int seqNum, int curr_depth) {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -83,9 +84,13 @@ __global__ void computePerSiteScore(nodeLikelihood* nodeVal, elem_t* treeLengthA
     //     return;
         
     __shared__ elem_t rate_mat_cache[16];
+    __shared__ elem_t rate_mat_square_cache[16];
+    __shared__ elem_t rate_mat_cubic_cache[16];
     const int tid = threadIdx.x;
     if (tid < 16) {
         rate_mat_cache[tid] = d_rate_mat[tid];
+        rate_mat_square_cache[tid] = d_rate_mat_square[tid];
+        rate_mat_cubic_cache[tid] = d_rate_mat_cubic[tid];
     }
     __syncthreads();
 
@@ -93,11 +98,11 @@ __global__ void computePerSiteScore(nodeLikelihood* nodeVal, elem_t* treeLengthA
     elem_t expm_p[16];
     for (int ii = 0 ; ii < 16; ii ++) {
         if (ii == 0 || ii == 5 || ii == 10 || ii == 15)  // diagonal
-            expm_p[ii] = 1 + (edge_length * rate_mat_cache[ii]) ; 
-            //+ __powf(edge_length, 2) * d_rate_mat_square[ii] / 2 + __powf(edge_length, 3) * d_rate_mat_cubic[ii] / 6 ;
+            expm_p[ii] = 1 + (edge_length * rate_mat_cache[ii])
+            + __powf(edge_length, 2) * rate_mat_square_cache[ii] / 2 + __powf(edge_length, 3) * rate_mat_cubic_cache[ii] / 6 ;
         else
-            expm_p[ii] = (edge_length * rate_mat_cache[ii]) ; 
-            //+ __powf(edge_length, 2) * d_rate_mat_square[ii] / 2 + __powf(edge_length, 3) * d_rate_mat_cubic[ii] / 6 ;
+            expm_p[ii] = (edge_length * rate_mat_cache[ii])
+            + __powf(edge_length, 2) * rate_mat_square_cache[ii] / 2 + __powf(edge_length, 3) * rate_mat_cubic_cache[ii] / 6 ;
     }
 
     for (int seqcolIdx = blockIdx.y; seqcolIdx < seqLength; seqcolIdx += blockDim.y * gridDim.y) 
@@ -171,6 +176,10 @@ void GPUInitialize(Params &params, char* transpose, int seq_length, int seq_num)
     HANDLE_ERROR(cudaMalloc((void **)&d_pi, 4 * sizeof(elem_t)));
     elem_t* d_rate_mat = NULL;
     HANDLE_ERROR(cudaMalloc((void **)&d_rate_mat, 16 * sizeof(elem_t)));
+    elem_t* d_rate_mat_square = NULL;
+    HANDLE_ERROR(cudaMalloc((void **)&d_rate_mat_square, 16 * sizeof(elem_t)));
+    elem_t* d_rate_mat_cubic = NULL;
+    HANDLE_ERROR(cudaMalloc((void **)&d_rate_mat_cubic, 16 * sizeof(elem_t)));
     // int* d_treeArray = NULL;
     // HANDLE_ERROR(cudaMalloc((void **)&d_treeArray, tree_total_node_num * sizeof(int)));
     // int* d_node_level = NULL;
@@ -186,6 +195,8 @@ void GPUInitialize(Params &params, char* transpose, int seq_length, int seq_num)
     // params.d_nodeVal = d_nodeVal;
     params.d_pi = d_pi;
     params.d_rate_mat = d_rate_mat;
+    params.d_rate_mat_square = d_rate_mat_square;
+    params.d_rate_mat_cubic = d_rate_mat_cubic;
     // params.d_treeArray = d_treeArray;
     // params.d_node_level = d_node_level;
     // params.d_treeLengthArray = d_treeLengthArray;
@@ -205,6 +216,8 @@ void GPUDestroy(Params &params) {
     // HANDLE_ERROR(cudaFree(params.d_nodeVal));
     HANDLE_ERROR(cudaFree(params.d_pi));
     HANDLE_ERROR(cudaFree(params.d_rate_mat));
+    HANDLE_ERROR(cudaFree(params.d_rate_mat_square));
+    HANDLE_ERROR(cudaFree(params.d_rate_mat_cubic));
     // HANDLE_ERROR(cudaFree(params.d_treeArray));
     // HANDLE_ERROR(cudaFree(params.d_node_level));
     // HANDLE_ERROR(cudaFree(params.d_treeLengthArray));
@@ -218,6 +231,20 @@ void cuda_maxll_score(elem_t& output_score, Params &params, int* treeArray, elem
 
     int h_max_depth = *std::max_element(node_level, node_level + tree_total_node_num);
 
+    elem_t rate_mat_square[16] = {0, };
+    elem_t rate_mat_cubic[16] = {0, };
+    for(int i=0; i<4; ++i)
+        for(int j=0; j<4; ++j)
+            for(int k=0; k<4; ++k) {
+                rate_mat_square[i * 4 + j] += rate_mat[i * 4 + k] * rate_mat[k * 4 + j];
+            }
+    for(int i=0; i<4; ++i)
+        for(int j=0; j<4; ++j)
+            for(int k=0; k<4; ++k) {
+                rate_mat_cubic[i * 4 + j] += rate_mat_square[i * 4 + k] * rate_mat[k * 4 + j];
+            }
+
+
     char* d_seqs = params.d_seqs;
     elem_t* d_odata = params.d_odata;
     // elem_t* d_expm_branch = params.d_expm_branch;
@@ -225,6 +252,8 @@ void cuda_maxll_score(elem_t& output_score, Params &params, int* treeArray, elem
     // nodeLikelihood* d_nodeVal = params.d_nodeVal;
     elem_t* d_pi = params.d_pi;
     elem_t* d_rate_mat = params.d_rate_mat;
+    elem_t* d_rate_mat_square = params.d_rate_mat_square;
+    elem_t* d_rate_mat_cubic = params.d_rate_mat_cubic;
     // int* d_treeArray = params.d_treeArray;
     // int* d_node_level = params.d_node_level;
     // elem_t* d_treeLengthArray = params.d_treeLengthArray;
@@ -242,6 +271,8 @@ void cuda_maxll_score(elem_t& output_score, Params &params, int* treeArray, elem
 
     HANDLE_ERROR(cudaMemcpy(d_pi, pi, 4 * sizeof(elem_t), cudaMemcpyHostToDevice));
     HANDLE_ERROR(cudaMemcpy(d_rate_mat, rate_mat, 16 * sizeof(elem_t), cudaMemcpyHostToDevice));
+    HANDLE_ERROR(cudaMemcpy(d_rate_mat_square, rate_mat_square, 16 * sizeof(elem_t), cudaMemcpyHostToDevice));
+    HANDLE_ERROR(cudaMemcpy(d_rate_mat_cubic, rate_mat_cubic, 16 * sizeof(elem_t), cudaMemcpyHostToDevice));
     HANDLE_ERROR(cudaMemcpy(d_treeArray, treeArray, tree_total_node_num * sizeof(int), cudaMemcpyHostToDevice));
     HANDLE_ERROR(cudaMemcpy(d_node_level, node_level, tree_total_node_num * sizeof(int), cudaMemcpyHostToDevice));
     HANDLE_ERROR(cudaMemcpy(d_treeLengthArray, treeLengthArray, tree_total_node_num * sizeof(elem_t), cudaMemcpyHostToDevice));
@@ -253,7 +284,8 @@ void cuda_maxll_score(elem_t& output_score, Params &params, int* treeArray, elem
     // build_expm<<<(tree_total_node_num+N_THREADS-1)/N_THREADS , N_THREADS>>>(d_expm_branch, d_treeLengthArray, d_rate_mat, tree_total_node_num);
     nodeValInit<<<computeMLSiteBlocks, computeMLSiteTPB>>>(d_nodeVal, d_seqs, d_node_level, tree_total_node_num, seq_length, seq_num);
     for (int curr_depth = h_max_depth; curr_depth > 0; curr_depth--) {
-        computePerSiteScore<<<computeMLSiteBlocks, computeMLSiteTPB>>>(d_nodeVal, d_treeLengthArray, d_rate_mat, d_treeArray, d_node_level,
+        computePerSiteScore<<<computeMLSiteBlocks, computeMLSiteTPB>>>(d_nodeVal, d_treeLengthArray, d_rate_mat, d_rate_mat_square, d_rate_mat_cubic, 
+                                                                    d_treeArray, d_node_level,
                                                                     tree_total_node_num, seq_length, seq_num, curr_depth);
     }
     rootScoreCalc<<<computeMLSiteBlocks, computeMLSiteTPB>>>(d_treeSiteScore, d_node_level, d_pi, d_nodeVal, tree_total_node_num, seq_length);
