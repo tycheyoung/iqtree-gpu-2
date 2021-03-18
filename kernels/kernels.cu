@@ -7,12 +7,12 @@ __device__ __forceinline__ elem_t siteLogLikelihood(nodeLikelihood root, elem_t*
     nodeLikelihood pi_root_sh;  //shift by exp(500)
     elem_t shift_max = -_MAX(_MAX(root.A, root.C), _MAX(root.G, root.T));
 
-    pi_root_sh.A = pi[0] * __expf(root.A + shift_max);
-    pi_root_sh.C = pi[1] * __expf(root.C + shift_max);
-    pi_root_sh.G = pi[2] * __expf(root.G + shift_max);
-    pi_root_sh.T = pi[3] * __expf(root.T + shift_max);
+    pi_root_sh.A = pi[0] * exp(root.A + shift_max);
+    pi_root_sh.C = pi[1] * exp(root.C + shift_max);
+    pi_root_sh.G = pi[2] * exp(root.G + shift_max);
+    pi_root_sh.T = pi[3] * exp(root.T + shift_max);
 
-    return __logf(pi_root_sh.A + pi_root_sh.C + pi_root_sh.G + pi_root_sh.T) - shift_max;
+    return log(pi_root_sh.A + pi_root_sh.C + pi_root_sh.G + pi_root_sh.T) - shift_max;
 }
 
 __device__ __forceinline__ int encodeBase(char base) {
@@ -99,10 +99,10 @@ __global__ void computePerSiteScore(nodeLikelihood* nodeVal, elem_t* treeLengthA
     for (int ii = 0 ; ii < 16; ii ++) {
         if (ii == 0 || ii == 5 || ii == 10 || ii == 15)  // diagonal
             expm_p[ii] = 1 + (edge_length * rate_mat_cache[ii])
-            + __powf(edge_length, 2) * rate_mat_square_cache[ii] / 2 + __powf(edge_length, 3) * rate_mat_cubic_cache[ii] / 6 ;
+            + pow(edge_length, 2) * rate_mat_square_cache[ii] / 2 + pow(edge_length, 3) * rate_mat_cubic_cache[ii] / 6 ;
         else
             expm_p[ii] = (edge_length * rate_mat_cache[ii])
-            + __powf(edge_length, 2) * rate_mat_square_cache[ii] / 2 + __powf(edge_length, 3) * rate_mat_cubic_cache[ii] / 6 ;
+            + pow(edge_length, 2) * rate_mat_square_cache[ii] / 2 + pow(edge_length, 3) * rate_mat_cubic_cache[ii] / 6 ;
     }
 
     for (int seqcolIdx = blockIdx.y; seqcolIdx < seqLength; seqcolIdx += blockDim.y * gridDim.y) 
@@ -115,15 +115,15 @@ __global__ void computePerSiteScore(nodeLikelihood* nodeVal, elem_t* treeLengthA
             elem_t shift_max = -_MAX(_MAX(child.A, child.C), _MAX(child.G, child.T));
             // elem_t* expm_p = expm_branch + idx * 16;
 
-            shft_child.A = __expf(child.A + shift_max);
-            shft_child.C = __expf(child.C + shift_max);
-            shft_child.G = __expf(child.G + shift_max);
-            shft_child.T = __expf(child.T + shift_max);
+            shft_child.A = exp(child.A + shift_max);
+            shft_child.C = exp(child.C + shift_max);
+            shft_child.G = exp(child.G + shift_max);
+            shft_child.T = exp(child.T + shift_max);
             
-            atomicAdd(&(nodeVal[seqcolIdx * totalNodeNum + parent_].A), __logf(expm_p[0] * shft_child.A + expm_p[4] * shft_child.C + expm_p[8]  * shft_child.G + expm_p[12] * shft_child.T)-shift_max);
-            atomicAdd(&(nodeVal[seqcolIdx * totalNodeNum + parent_].C), __logf(expm_p[1] * shft_child.A + expm_p[5] * shft_child.C + expm_p[9]  * shft_child.G + expm_p[13] * shft_child.T)-shift_max);
-            atomicAdd(&(nodeVal[seqcolIdx * totalNodeNum + parent_].G), __logf(expm_p[2] * shft_child.A + expm_p[6] * shft_child.C + expm_p[10] * shft_child.G + expm_p[14] * shft_child.T)-shift_max);
-            atomicAdd(&(nodeVal[seqcolIdx * totalNodeNum + parent_].T), __logf(expm_p[3] * shft_child.A + expm_p[7] * shft_child.C + expm_p[11] * shft_child.G + expm_p[15] * shft_child.T)-shift_max);
+            atomicAdd(&(nodeVal[seqcolIdx * totalNodeNum + parent_].A), log(expm_p[0] * shft_child.A + expm_p[4] * shft_child.C + expm_p[8]  * shft_child.G + expm_p[12] * shft_child.T)-shift_max);
+            atomicAdd(&(nodeVal[seqcolIdx * totalNodeNum + parent_].C), log(expm_p[1] * shft_child.A + expm_p[5] * shft_child.C + expm_p[9]  * shft_child.G + expm_p[13] * shft_child.T)-shift_max);
+            atomicAdd(&(nodeVal[seqcolIdx * totalNodeNum + parent_].G), log(expm_p[2] * shft_child.A + expm_p[6] * shft_child.C + expm_p[10] * shft_child.G + expm_p[14] * shft_child.T)-shift_max);
+            atomicAdd(&(nodeVal[seqcolIdx * totalNodeNum + parent_].T), log(expm_p[3] * shft_child.A + expm_p[7] * shft_child.C + expm_p[11] * shft_child.G + expm_p[15] * shft_child.T)-shift_max);
             // if (seqcolIdx == 0) {
             //     for (int i = 0 ; i < 50; ++i) {
             //         printf("%f %f %f %f \n", nodeVal[seqcolIdx * totalNodeNum + parent_].A, nodeVal[seqcolIdx * totalNodeNum + parent_].C, nodeVal[seqcolIdx * totalNodeNum + parent_].G, nodeVal[seqcolIdx * totalNodeNum + parent_].T);

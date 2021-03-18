@@ -1,7 +1,7 @@
 #ifndef DATATYPE__CUH__
 #define DATATYPE__CUH__
 
-#define USE_FLOAT
+// #define USE_FLOAT
 
 
 #ifdef USE_FLOAT
