@@ -14,7 +14,8 @@ target_compile_features(kernels PUBLIC cxx_std_14)
 # particle library to be built with -dc as the member functions 
 # could be called by other libraries and executables
 # set(CMAKE_CXX_FLAGS	"${CMAKE_CXX_FLAGS}	-Wall")	
-set(CMAKE_CUDA_FLAGS	"${CMAKE_CUDA_FLAGS}	-Xcompiler=-Wall -rdc=true -lz -lm ")
+set(CMAKE_CUDA_FLAGS	"${CMAKE_CUDA_FLAGS} -Xcompiler=-Wall -gencode arch=compute_61,code=sm_61 -rdc=true -lz -lm ")
+# set(CMAKE_CUDA_FLAGS	"${CMAKE_CUDA_FLAGS} -Xcompiler=-Wall -gencode arch=compute_75,code=sm_75 -rdc=true -lz -lm ")
 set_target_properties(kernels PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 set_target_properties(kernels PROPERTIES POSITION_INDEPENDENT_CODE ON)
 

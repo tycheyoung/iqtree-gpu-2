@@ -133,7 +133,7 @@ __global__ void computePerSiteScore(nodeLikelihood* nodeVal, elem_t* treeLengthA
     }
 }
 
-__global__ void rootScoreCalc(float* treeSiteScore, int* node_level, elem_t* pi, nodeLikelihood* nodeVal, int totalNodeNum, const int seqLength) {
+__global__ void rootScoreCalc(elem_t* treeSiteScore, int* node_level, elem_t* pi, nodeLikelihood* nodeVal, int totalNodeNum, const int seqLength) {
     // const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     // if (idx >= seqLength)
     //     return;
