@@ -1221,92 +1221,77 @@ Node *findFirstFarLeaf(Node *node, Node *dad = NULL) {
     
 }
 
-void preprocess(int nodeLevel[], int treeArray[], elem_t treeLengthArray[], double MLMinBranchLength, int depth, Node* curr) {
-    nodeLevel[curr->id] = depth;
+void preprocess(int nodeLevel[], int treeArray[], elem_t treeLengthArray[], double MLMinBranchLength, int depth, Node* curr,
+                int IDToTemp[]) {
+    nodeLevel[IDToTemp[curr->id]] = depth;
 
     NeighborVec neivec = curr->neighbors;
     NeighborVec::iterator itr;
     for (itr = neivec.begin(); itr != neivec.end(); itr++){
-        if (nodeLevel[(*itr)->node->id] == -1) {
-            treeArray[(*itr)->node->id] = curr->id;
-            treeLengthArray[(*itr)->node->id] = (elem_t) ((*itr)->length > MLMinBranchLength ? (*itr)->length: MLMinBranchLength);
-            preprocess(nodeLevel, treeArray, treeLengthArray, MLMinBranchLength, depth + 1, (*itr)->node);
+        if (IDToTemp[(*itr)->node->id] != 0 && nodeLevel[IDToTemp[(*itr)->node->id]] == -1) {
+            treeArray[IDToTemp[(*itr)->node->id]] = IDToTemp[curr->id];
+            treeLengthArray[IDToTemp[(*itr)->node->id]] = (elem_t) ((*itr)->length > MLMinBranchLength ? (*itr)->length: MLMinBranchLength);
+            preprocess(nodeLevel, treeArray, treeLengthArray, MLMinBranchLength, depth + 1, (*itr)->node, IDToTemp);
         }
     }
 }
 
+void relabel(int tempToID[], int IDToTemp[], Node* curr, int prev, int& tempLabel) {
+    tempToID[tempLabel] = curr->id;
+    IDToTemp[curr->id] = tempLabel;
+    tempLabel++;
 
-double PhyloTree::computeLikelihoodGPU() {
-    double MLMinBranchLength = 5.0e-9;
-    int treeArray[nodeNum] = { 0 };
-    elem_t treeLengthArray[nodeNum] = { 0 };
-    int nodeLevel[nodeNum];
+    NeighborVec neivec = curr->neighbors;
+    NeighborVec::iterator itr;
+    for (itr = neivec.begin(); itr != neivec.end(); itr++){
+        if ((*itr)->node->id != prev) {
+            relabel(tempToID, IDToTemp, (*itr)->node, curr->id, tempLabel);
+        }
+    }
+}
+
+double PhyloTree::computeLikelihoodGPU(PhyloNeighbor *dad_branch, PhyloNode *dad) {
+    int tempToID[nodeNum] = { 0 };
+    int IDToTemp[nodeNum] = { 0 };
+    int numSubtree = 0;
+
+    relabel(tempToID, IDToTemp,(Node*) dad, dad_branch->node->id, numSubtree);
+
+    double MLMinBranchLength = 1.0e-9;
+    int treeArray[numSubtree] = { 0 };
+    elem_t treeLengthArray[numSubtree] = { 0 };
+    int nodeLevel[numSubtree];
     for (int i = 0; i < nodeNum; i++) nodeLevel[i] = -1;
-    Node *start = root;
-    //may have to check for case in which there is only one node
-    if (start->isLeaf()) start = start->neighbors[0]->node;
-    // cout << aln->char_partition << endl;
 
-    treeArray[start->id] = -1;
-    preprocess(nodeLevel, treeArray, treeLengthArray, MLMinBranchLength, 0, start);
+    treeArray[IDToTemp[dad->id]] = -1;
+    preprocess(nodeLevel, treeArray, treeLengthArray, MLMinBranchLength, 0, (Node*) dad, IDToTemp);
 
-    //cout << "gpu sequence array" << endl;
-    //cout << params->GPUseqs << endl;
-    // cout << "number of sequences" << endl;
-    // cout << aln->getNSeq() << endl;
-    // cout << "number of aligned columns" << endl;
-    // cout << aln->getNSite() << endl;
-    
-
-    // cout << "tree array" << endl;
-    // for (int i = 0; i < nodeNum; i++) {
-    //     cout << treeArray[i] << ", ";
-    // }
-    // cout << endl << "length array" << endl;
-    // for (int i = 0; i < nodeNum; i++) {
-    //     cout << treeLengthArray[i] << ", ";
-    // }
-    // cout << endl <<"depth array" << endl;
-    // for (int i = 0; i < nodeNum; i++) {
-    //     cout << nodeLevel[i] << ", ";
-    // }
-    // cout << endl;
-
-    // elem_t rate_mat[16];
-    // for (int i = 0 ; i < 16; ++i) {
-    //     rate_mat[i] = 0.25;
-    // }
-    // elem_t pi[4] = {0.25, 0.25, 0.25, 0.25};
-
-    //get rate matrix
+    // get rate matrix
     double *rate_mat = new double[model->num_states * model->num_states];
     model->getQMatrix(rate_mat);
     
-    //copy rate matrix 
+    // copy rate matrix 
     elem_t rate_mat2[16];
     for (int i = 0 ; i < 16; ++i) {
         rate_mat2[i] = rate_mat[i];
-        //cout << rate_mat2[i] << ", ";
     }
-    //cout << endl;
 
     elem_t pi[4];
 
-    //get statefreqs
+    // get statefreqs
     double *state_freqs = new double[model->num_states];
     model->getStateFrequency(state_freqs);
 
-    //copy statefreqs
+    // copy statefreqs
     for (int i = 0; i < model->num_states; i++) {
         pi[i] = state_freqs[i];
-        //cout << state_freqs[i] << ", ";
     }
-    //cout << endl;
+
+    // get transition matrix
+    model_factory[1];
 
     int seq_num = aln->getNSeq();
     int seq_length = aln->getNSite();   
-    // char transpose[params->GPUtranspose.length()+1];
-    // strcpy(transpose, params->GPUtranspose.c_str());
 
     elem_t score = 0.0;
     cuda_maxll_score(score, Params::getInstance(), treeArray, treeLengthArray, nodeLevel, rate_mat2, 
@@ -1344,8 +1329,7 @@ double PhyloTree::computeLikelihood(double *pattern_lh) {
 //            cout << __func__ << " HIT ROOT STATE " << endl;
 //        score = computeLikelihoodRooted((PhyloNeighbor*) vroot->neighbors[0], (PhyloNode*) vroot);
 //    } else {
-        score = computeLikelihoodGPU();
-        // score = computeLikelihoodBranch(current_it, (PhyloNode*) current_it_back->node);
+        score = computeLikelihoodGPU(current_it, (PhyloNode*) current_it_back->node);
 //    }
     if (pattern_lh)
         memmove(pattern_lh, _pattern_lh, aln->size() * sizeof(double));
@@ -1435,8 +1419,7 @@ double PhyloTree::computePatternLhCat(SiteLoglType wsl) {
 
     double score;
 
-    // score = computeLikelihoodBranch(current_it, (PhyloNode*)current_it_back->node);
-    score = computeLikelihoodGPU();
+    score = computeLikelihoodGPU(current_it, (PhyloNode*)current_it_back->node);
     // TODO: SIMD aware
     transformPatternLhCat();
     /*
@@ -2310,11 +2293,11 @@ double PhyloTree::approxOneBranch(PhyloNode *node, PhyloNode *dad, double b0) {
     PhyloNeighbor *node_nei = (PhyloNeighbor*)(node->findNeighbor(dad));
     double old_len = dad_nei->length;
     dad_nei->length = node_nei->length = b0;
-    double l0 = computeLikelihoodBranch(dad_nei, dad);
+    double l0 = computeLikelihoodGPU(dad_nei, dad);
     dad_nei->length = node_nei->length = b1;
-    double l1 = computeLikelihoodBranch(dad_nei, dad);
+    double l1 = computeLikelihoodGPU(dad_nei, dad);
     dad_nei->length = node_nei->length = b2;
-    double l2 = computeLikelihoodBranch(dad_nei, dad);
+    double l2 = computeLikelihoodGPU(dad_nei, dad);
     dad_nei->length = node_nei->length = old_len;
 
     t1 = sqrt(b0);
@@ -2538,7 +2521,7 @@ double PhyloTree::computeLikelihoodZeroBranch(PhyloNeighbor *dad_branch, PhyloNo
     PhyloNeighbor *node_branch = (PhyloNeighbor*) dad_branch->node->findNeighbor(dad);
     dad_branch->length = 0.0;
     node_branch->length = 0.0;
-    lh_zero_branch = computeLikelihoodBranch(dad_branch, dad);
+    lh_zero_branch = computeLikelihoodGPU(dad_branch, dad);
     // restore branch length
     dad_branch->length = saved_len;
     node_branch->length = saved_len;
@@ -2615,7 +2598,7 @@ double PhyloTree::computeFunction(double value) {
     if (!is_opt_scaling) {
         current_it->length = value;
         current_it_back->length = value;
-        return -computeLikelihoodBranch(current_it, (PhyloNode*) current_it_back->node);
+        return -computeLikelihoodGPU(current_it, (PhyloNode*) current_it_back->node);
     } else {
         if (value != current_scaling) {
             scaleLength(value / current_scaling);
@@ -2811,7 +2794,7 @@ double PhyloTree::optimizeAllBranches(int my_iterations, double tolerance, int m
     NodeVector nodes, nodes2;
     computeBestTraversal(nodes, nodes2);
     
-    double tree_lh = computeLikelihoodBranch((PhyloNeighbor*)nodes[0]->findNeighbor(nodes2[0]), (PhyloNode*)nodes[0]);
+    double tree_lh = computeLikelihoodGPU((PhyloNeighbor*)nodes[0]->findNeighbor(nodes2[0]), (PhyloNode*)nodes[0]);
     
     if (verbose_mode >= VB_MAX) {
         cout << "Initial tree log-likelihood: " << tree_lh << endl;
@@ -4390,7 +4373,7 @@ double PhyloTree::assessSPRMove(double cur_score, const SPRMove &spr) {
     // optimize branches
     double score;
     optimizeAllBranches(dad);
-    score = computeLikelihoodBranch((PhyloNeighbor*)dad->neighbors.back(), dad);
+    score = computeLikelihoodGPU((PhyloNeighbor*)dad->neighbors.back(), dad);
 
     // if score improves, return
     if (score > cur_score)

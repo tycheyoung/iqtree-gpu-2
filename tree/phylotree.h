@@ -981,7 +981,7 @@ public:
      */
     virtual double computeLikelihood(double *pattern_lh = NULL);
 
-    virtual double computeLikelihoodGPU();
+    virtual double computeLikelihoodGPU(PhyloNeighbor *dad_branch, PhyloNode *dad);
         
     /**
      * @return number of elements per site lhl entry, used in conjunction with computePatternLhCat
