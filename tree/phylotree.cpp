@@ -1236,26 +1236,31 @@ void preprocess(int nodeLevel[], int treeArray[], elem_t treeLengthArray[], doub
     }
 }
 
-void relabel(int tempToID[], int IDToTemp[], Node* curr, int prev, int& tempLabel) {
+void relabel(int tempToID[], int IDToTemp[], Node* curr, int prev, int& tempLabel, vector<int>& terminals) {
     tempToID[tempLabel] = curr->id;
     IDToTemp[curr->id] = tempLabel;
+    if (curr->isLeaf()) {
+        terminals.push_back(tempLabel);
+    }
     tempLabel++;
 
     NeighborVec neivec = curr->neighbors;
     NeighborVec::iterator itr;
     for (itr = neivec.begin(); itr != neivec.end(); itr++){
         if ((*itr)->node->id != prev) {
-            relabel(tempToID, IDToTemp, (*itr)->node, curr->id, tempLabel);
+            relabel(tempToID, IDToTemp, (*itr)->node, curr->id, tempLabel, terminals);
         }
     }
 }
 
 double PhyloTree::computeLikelihoodGPU(PhyloNeighbor *dad_branch, PhyloNode *dad) {
+    cout << dad->id << endl;
     int tempToID[nodeNum] = { 0 };
     int IDToTemp[nodeNum] = { 0 };
     int numSubtree = 0;
+    vector<int> terminals;
 
-    relabel(tempToID, IDToTemp,(Node*) dad, dad_branch->node->id, numSubtree);
+    relabel(tempToID, IDToTemp,(Node*) dad, dad_branch->node->id, numSubtree, terminals);
 
     double MLMinBranchLength = 1.0e-9;
     int treeArray[numSubtree] = { 0 };
