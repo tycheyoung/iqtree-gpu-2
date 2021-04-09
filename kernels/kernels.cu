@@ -53,8 +53,7 @@ __device__ __forceinline__ nodeLikelihood constructBaseLeaf(int encodedBase) {
 
 
 
-__global__ void nodeValInit(nodeLikelihood* nodeVal, char* __restrict__ seq, int* node_level, int totalNodeNum, 
-                            int seqLength, int seqNum) {
+__global__ void nodeValInit(nodeLikelihood* nodeVal, int totalNodeNum, int seqLength) {
     const int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= totalNodeNum)
         return;
@@ -63,12 +62,28 @@ __global__ void nodeValInit(nodeLikelihood* nodeVal, char* __restrict__ seq, int
         return;
 
     // cooperative_groups::grid_group g = cooperative_groups::this_grid();
-    if(idx < seqNum) {  // initialize childs
-        nodeVal[seqcolIdx * totalNodeNum + idx] = constructBaseLeaf(encodeBase(seq[seqcolIdx * seqNum + idx]));
-    }
-    else {
+
+    // if(idx < seqNum) {  // initialize childs
+    //     nodeVal[seqcolIdx * totalNodeNum + idx] = constructBaseLeaf(encodeBase(seq[seqcolIdx * seqNum + idx]));
+    // }
+    // else {
         nodeVal[seqcolIdx * totalNodeNum + idx] = {.A = 0, .C = 0, .G = 0, .T = 0};  // multiply-cumulated
-    }
+    // }
+}
+__global__ void nodeValInitTerminal(nodeLikelihood* nodeVal, char* __restrict__ seq, int* d_terminals, int* d_tempToID, 
+                            int totalNodeNum, int seqLength, int seqNum) {
+    const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= seqNum)
+        return;
+    const int seqcolIdx = blockIdx.y;
+    if (seqcolIdx >= seqLength)
+        return;
+
+    // cooperative_groups::grid_group g = cooperative_groups::this_grid();
+    unsigned int terminalIdx = d_tempToID[d_terminals[idx]];
+    // if(idx < seqNum) {  // initialize childs
+        nodeVal[seqcolIdx * totalNodeNum + d_terminals[idx]]  = constructBaseLeaf(encodeBase(seq[seqcolIdx * seqNum + terminalIdx]));
+    // }
 }
 
 
@@ -223,7 +238,7 @@ void GPUDestroy(Params &params) {
     // HANDLE_ERROR(cudaFree(params.d_treeLengthArray));
 }
 
-void cuda_maxll_score(elem_t& output_score, Params &params, int* treeArray, elem_t* treeLengthArray, int* node_level, elem_t* rate_mat, 
+void cuda_maxll_score(elem_t& output_score, Params &params, int* treeArray, elem_t* treeLengthArray, int* node_level, int* terminals, int* tempToID, elem_t* rate_mat, 
                         elem_t* pi, int tree_total_node_num, int seq_length, int seq_num) {
 
     cudaDeviceProp prop;
@@ -276,13 +291,22 @@ void cuda_maxll_score(elem_t& output_score, Params &params, int* treeArray, elem
     HANDLE_ERROR(cudaMemcpy(d_treeArray, treeArray, tree_total_node_num * sizeof(int), cudaMemcpyHostToDevice));
     HANDLE_ERROR(cudaMemcpy(d_node_level, node_level, tree_total_node_num * sizeof(int), cudaMemcpyHostToDevice));
     HANDLE_ERROR(cudaMemcpy(d_treeLengthArray, treeLengthArray, tree_total_node_num * sizeof(elem_t), cudaMemcpyHostToDevice));
-    
+
+    int* d_terminals = NULL;
+    HANDLE_ERROR(cudaMalloc((void **)&d_terminals, seq_num * sizeof(int)));
+    HANDLE_ERROR(cudaMemcpy(d_terminals, terminals, seq_num * sizeof(int), cudaMemcpyHostToDevice));
+    int* d_tempToID = NULL;
+    HANDLE_ERROR(cudaMalloc((void **)&d_tempToID, tree_total_node_num * sizeof(int)));
+    HANDLE_ERROR(cudaMemcpy(d_tempToID, tempToID, tree_total_node_num * sizeof(int), cudaMemcpyHostToDevice));
+
     /// Kernel Launch ///
     dim3 computeMLSiteBlocks((tree_total_node_num + N_THREADS - 1) / N_THREADS, MIN(seq_length, prop.maxGridSize[1]));
+    dim3 computeMLSiteBlocksPartial((seq_num + N_THREADS - 1) / N_THREADS, MIN(seq_length, prop.maxGridSize[1]));
     dim3 computeMLSiteTPB(N_THREADS, 1, 1);
 
     // build_expm<<<(tree_total_node_num+N_THREADS-1)/N_THREADS , N_THREADS>>>(d_expm_branch, d_treeLengthArray, d_rate_mat, tree_total_node_num);
-    nodeValInit<<<computeMLSiteBlocks, computeMLSiteTPB>>>(d_nodeVal, d_seqs, d_node_level, tree_total_node_num, seq_length, seq_num);
+    nodeValInit<<<computeMLSiteBlocks, computeMLSiteTPB>>>(d_nodeVal, tree_total_node_num, seq_length);
+    nodeValInitTerminal<<<computeMLSiteBlocksPartial, computeMLSiteTPB>>>(d_nodeVal, d_seqs, d_terminals, d_tempToID, tree_total_node_num, seq_length, seq_num);
     for (int curr_depth = h_max_depth; curr_depth > 0; curr_depth--) {
         computePerSiteScore<<<computeMLSiteBlocks, computeMLSiteTPB>>>(d_nodeVal, d_treeLengthArray, d_rate_mat, d_rate_mat_square, d_rate_mat_cubic, 
                                                                     d_treeArray, d_node_level,
@@ -313,6 +337,9 @@ void cuda_maxll_score(elem_t& output_score, Params &params, int* treeArray, elem
     HANDLE_ERROR(cudaFree(d_treeArray));
     HANDLE_ERROR(cudaFree(d_node_level));
     HANDLE_ERROR(cudaFree(d_treeLengthArray));
+
+    HANDLE_ERROR(cudaFree(d_terminals));
+    HANDLE_ERROR(cudaFree(d_tempToID));
 
     return;
 }

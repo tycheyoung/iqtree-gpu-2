@@ -1295,12 +1295,15 @@ double PhyloTree::computeLikelihoodGPU(PhyloNeighbor *dad_branch, PhyloNode *dad
     // get transition matrix
     model_factory[1];
 
-    int seq_num = aln->getNSeq();
+    // int seq_num = aln->getNSeq();
+    int seq_num = terminals.size();
     int seq_length = aln->getNSite();   
 
     elem_t score = 0.0;
-    cuda_maxll_score(score, Params::getInstance(), treeArray, treeLengthArray, nodeLevel, rate_mat2, 
-                     pi, nodeNum, seq_length, seq_num);
+    cuda_maxll_score(score, Params::getInstance(), treeArray, treeLengthArray, nodeLevel, terminals.data(), tempToID, rate_mat2, 
+                     pi, numSubtree, seq_length, seq_num);
+    // cuda_maxll_score(score, Params::getInstance(), treeArray, treeLengthArray, nodeLevel, rate_mat2, 
+    //                  pi, nodeNum, seq_length, seq_num);
     
     delete[] rate_mat;
     delete[] state_freqs;
